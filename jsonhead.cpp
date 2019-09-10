@@ -95,7 +95,7 @@ bool jsonhead::json_lexer::next() {
 #endif
           ss.Append(cur);
           if (cur == '\\') {
-            if (cur = next_ch())
+            if (!(cur = next_ch()))
               return false;
             ss.Append(cur);
           }
@@ -104,6 +104,7 @@ bool jsonhead::json_lexer::next() {
         curtok = json_token::v_string;
         curstr = ss.ToString();
       }
+
       break;
 
     default:
@@ -239,33 +240,6 @@ static int group_table[] ={
    0,   1,   2,   2,   3,   3,   4,   4,   5,   6,   6,   7,   7,   7,   7,   7,   7,   7
 };
 
-static std::map<jsonhead::json_token, int> symbol_table = 
-{
-  /* Non-Terminals */
-  {              jsonhead::json_token::none,  0 },
-  {      jsonhead::json_token::json_nt_json,  1 },
-  {    jsonhead::json_token::json_nt_object,  2 },
-  {   jsonhead::json_token::json_nt_members,  3 },
-  {      jsonhead::json_token::json_nt_pair,  4 },
-  {     jsonhead::json_token::json_nt_array,  5 },
-  {  jsonhead::json_token::json_nt_elements,  6 },
-  {     jsonhead::json_token::json_nt_value,  7 },
-
-  /* Terminals */
-  { jsonhead::json_token::object_starts,   8 },
-  {   jsonhead::json_token::object_ends,   9 },
-  {       jsonhead::json_token::v_comma,  10 },
-  {        jsonhead::json_token::v_pair,  11 },
-  {  jsonhead::json_token::array_starts,  12 },
-  {    jsonhead::json_token::array_ends,  13 },
-  {        jsonhead::json_token::v_true,  14 },
-  {       jsonhead::json_token::v_false,  15 },
-  {        jsonhead::json_token::v_null,  16 },
-  {      jsonhead::json_token::v_string,  17 },
-  {      jsonhead::json_token::v_number,  18 },
-  {           jsonhead::json_token::eof,  19 },
-};
-
 static jsonhead::json_token symbol_index[] = {
               jsonhead::json_token::none,
       jsonhead::json_token::json_nt_json,
@@ -275,6 +249,7 @@ static jsonhead::json_token symbol_index[] = {
      jsonhead::json_token::json_nt_array,
   jsonhead::json_token::json_nt_elements,
      jsonhead::json_token::json_nt_value, 
+
      jsonhead::json_token::object_starts,
        jsonhead::json_token::object_ends,
            jsonhead::json_token::v_comma,
@@ -375,8 +350,7 @@ REDUCE:
     stack.push(0);
 
   bool require_reduce = false;
-  int symbol = symbol_table[lex.type];
-  int code = goto_table[stack.top()][symbol];
+  int code = goto_table[stack.top()][(int)lex.type()];
 
   if (code > 0)
   {
@@ -397,7 +371,7 @@ REDUCE:
   else
   {
     // Panic mode
-    this->error = true;
+    this->_error = true;
     return false;
   }
 

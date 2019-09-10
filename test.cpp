@@ -16,12 +16,20 @@ using namespace std;
 
 int main()
 {
-  jsonhead::json_lexer lexer(R"(C:\Users\rollrat\Desktop\namuwiki190312\namuwiki_20190312.json)");
+  auto fn =  R"(/home/rollrat/github/jsonhead/namuwiki_20190312.json)";
+  ifstream file(fn, ios::binary | ios::ate);
+  long long tsz = file.tellg();
+  file.close();
 
-  int count = 0;
+  jsonhead::json_lexer lexer(fn);
+  long long count = 0;
   while (lexer.next())
   {
     count++;
-    //cout << lexer.str() << endl;
+    if (count % 100000 == 0) {
+      cout << lexer.stream().tellg() << '/' << tsz << '(' << ((double)lexer.stream().tellg() / tsz * 100.0) << ')' << '\n';
+    }
   }
+
+  cout << count << '\n';
 }

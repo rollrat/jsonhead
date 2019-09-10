@@ -27,7 +27,7 @@ namespace jsonhead {
 // https://github.com/cierelabs/yaml_spirit/blob/master/doc/specs/json-ebnf.txt
 typedef enum class _json_token
 {
-  none,
+  none=0,
   json_nt_json,
   json_nt_object,
   json_nt_members,
@@ -74,6 +74,8 @@ public:
   ofw::String str() const;
 
   const char *gbuffer() const;
+
+  std::ifstream& stream() { return ifs; }
 
 private:
   void buffer_refresh();
@@ -138,16 +140,16 @@ class json_parser
 {
   json_lexer lex;
   jvalue entry;
-  bool skip_literal;
-  bool error;
+  bool _skip_literal;
+  bool _error;
   bool latest_key_input = false;
 
 public:
   json_parser(std::string file_path);
 
   bool step();
-  bool& skip_literal() { return skip_literal; }
-  bool error() const { return error; }
+  bool& skip_literal() { return _skip_literal; }
+  bool error() const { return _error; }
 
 private:
 #if 0

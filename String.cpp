@@ -13,7 +13,10 @@
 #include "String.h"
 #include <memory.h>
 #include <string.h>
+#include <stdlib.h>
+#include <stdio.h>
 #include <wchar.h>
+#include <cmath>
 
 using namespace ofw;
 
@@ -192,6 +195,42 @@ char *ofw::StringTools::strrnstrn(char * ptr, size_t ptrlen,
   return NULL;
 }
 
+void ofw::StringTools::strnset(char *ptr, wchar_t ch, size_t len) {
+  char *trim = (char *)align_address(ptr);
+
+  if (trim < ptr) trim = ptr;
+
+  for (; ptr < trim && len; ptr++, len--) *ptr = ch;
+
+  if (len > 0) {
+    ptr_type put = ((ptr_type)ch << 0) | ((ptr_type)ch << 16);
+    if (sizeof(ptr_type) == sizeof(uint64_t))
+      put |= ((ptr_type)ch << 32) | ((ptr_type)ch << 48);
+
+    while (len >= sizeof(ptr_type) / 2) {
+      *(ptr_type *)trim = put;
+      trim += sizeof(ptr_type) / 2;
+      len -= sizeof(ptr_type) / 2;
+    }
+
+    if (sizeof(ptr_type) == sizeof(uint64_t)) {
+      if (len == 3) {
+        *(uint32_t *)trim = put;
+        trim[2] = ch;
+        return;
+      }
+      if (len == 2) {
+        *(uint32_t *)trim = put;
+        return;
+      }
+    }
+    if (len == 1) {
+      *(uint16_t *)trim = put;
+      return;
+    }
+  }
+}
+
 size_t ofw::StringTools::strcountch(char * ptr, char * last, char ch)
 {
   static_assert(sizeof(char) == 1, "Do not use 'wcountch' function!");
@@ -255,7 +294,7 @@ String::String(char ch, size_t count)
 {
   first = alloc(length + 1);
   last = first + length - 1;
-  _strnset(first, ch, count);
+  ofw::StringTools::strnset(first, ch, count);
   first[length] = 0; 
 }
 
@@ -271,14 +310,13 @@ String::String(char ch)
 String::String(int num)
 {
   char buffer[65];
-  _itoa(num, buffer, 10);
   InitString((const char *)buffer);
 }
 
 String::String(long int num)
 {
   char buffer[65];
-  _ltoa(num, buffer, 10);
+  sprintf(buffer, "%lld", num);
   InitString((const char *)buffer);
 }
 
@@ -582,7 +620,7 @@ String String::PadLeft(size_t len, char pad)
     char* ret = new char[len + 1];
     size_t   padlen = len - length;
 
-    _strnset(ret, pad, padlen);
+    ofw::StringTools::strnset(ret, pad, padlen);
     memcpy(ret + padlen, first, length * sizeof(char));
 
     ret[len] = 0;
@@ -602,7 +640,7 @@ String String::PadRight(size_t len, char pad)
     char *ret = new char[len + 1];
 
     memcpy(ret, first, length * sizeof(char));
-    _strnset(ret + length, pad, len - length);
+    ofw::StringTools::strnset(ret + length, pad, len - length);
 
     ret[len] = 0;
 
@@ -624,9 +662,9 @@ String String::PadCenter(size_t len, char pad, bool lefts)
 
     char *ret = new char[len + 1];
 
-    _strnset(ret, pad, lpadlen);
+    ofw::StringTools::strnset(ret, pad, lpadlen);
     memcpy(ret + lpadlen, first, length * sizeof(char));
-    _strnset(ret + lpadlen + length, pad, rpadlen);
+    ofw::StringTools::strnset(ret + lpadlen + length, pad, rpadlen);
 
     ret[len] = 0;
 
@@ -668,10 +706,11 @@ String String::Repeat(size_t count)
   return String(neString, newLen, false);
 }
 
+// TODO: Implements reverse function
 String String::Reverse()
 {
   char *ret = this->ToArray();
-  _strrev(ret);
+  //strrev(ret);
   return String(ret, length, false);
 }
 
@@ -1613,7 +1652,7 @@ String::ArrayType String::LineSplitHelper(size_t len, const char *front,
   {
     if (end_len)
     {
-      _strnset(n[countLineLen - 1]->first + front_len + 
+      ofw::StringTools::strnset(n[countLineLen - 1]->first + front_len + 
         remainLen, L' ', len - remainLen);
     }
     else
@@ -1674,7 +1713,7 @@ String String::LineBreak(size_t len)
 {
   size_t remainLen = length % len;
   size_t fullinsertLen = length / len;
-  size_t countLine = fullinsertLen + (remainLen != 0); // ¸ðµç ÁÙ ¼ö
+  size_t countLine = fullinsertLen + (remainLen != 0); // ï¿½ï¿½ï¿½ ï¿½ï¿½ ï¿½ï¿½
 
   size_t totalLen = countLine * 2 - (countLine ? 2 : 0) + length;
 
