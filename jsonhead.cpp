@@ -11,6 +11,12 @@
 #include "jsonhead.h"
 #include <sstream>
 
+///===-----------------------------------------------------------------------===
+///
+///               Json Lexer
+///
+///===-----------------------------------------------------------------------===
+
 jsonhead::json_lexer::json_lexer(std::string file_path, size_t buffer_size) 
   : ifs(file_path), curtok(json_token::none), buffer_size(buffer_size) {
   buffer = new char[buffer_size];
@@ -78,20 +84,21 @@ bool jsonhead::json_lexer::next() {
     case '"':
       {
         ofw::StringBuilder ss;
-        bool force = false;
 
         // donot parse \uXXXX unicode style character
         while (cur = next_ch())
         {
-          if (!force && cur == '"') break;
+          if (cur == '"') break;
+#if REAL_JSON
           // escapes
           if (1 <= cur && cur <= 19) return false;
+#endif
           ss.Append(cur);
-          if (!force && cur == '\\') {
-            force = true;
-            continue;
+          if (cur == '\\') {
+            if (cur = next_ch())
+              return false;
+            ss.Append(cur);
           }
-          force = false;
         }
 
         curtok = json_token::v_string;
@@ -187,10 +194,108 @@ char jsonhead::json_lexer::next_ch() {
   return *pointer++;
 }
 
+///===-----------------------------------------------------------------------===
+///
+///               Json Parser
+///
+///===-----------------------------------------------------------------------===
+
+static int goto_table[][20] = {
+   {   0,   1,   0,   2,   0,   0,   0,   0,   3,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0 },
+   {   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,  28 },
+   {   0,   0,   4,   0,   0,   0,   0,   0,   0,   0,   0,   0,   5,   0,   0,   0,   0,   0,   0,   0 },
+   {   0,   0,   0,   0,   7,   8,   0,   0,   0,   6,   0,   0,   0,   0,   0,   0,   0,   9,   0,   0 },
+   {   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,  -1 },
+   {   0,   0,  16,  15,   0,   0,  11,  12,   3,   0,   0,   0,   5,  10,  17,  18,  19,  13,  14,   0 },
+   {   0,   0,   0,   0,   0,   0,   0,   0,   0,  -4,  -4,   0,  -4,  -4,   0,   0,   0,   0,   0,   0 },
+   {   0,   0,   0,   0,   0,   0,   0,   0,   0,  20,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0 },
+   {   0,   0,   0,   0,   0,   0,   0,   0,   0,  -6,  21,   0,   0,   0,   0,   0,   0,   0,   0,   0 },
+   {   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,  22,   0,   0,   0,   0,   0,   0,   0,   0 },
+   {   0,   0,   0,   0,   0,   0,   0,   0,   0,  -2,  -2,   0,   0,  -2,   0,   0,   0,   0,   0,  -2 },
+   {   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,  23,   0,   0,   0,   0,   0,   0 },
+   {   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,  24,   0,   0,  -9,   0,   0,   0,   0,   0,   0 },
+   {   0,   0,   0,   0,   0,   0,   0,   0,   0, -11, -11,   0,   0, -11,   0,   0,   0,   0,   0,   0 },
+   {   0,   0,   0,   0,   0,   0,   0,   0,   0, -12, -12,   0,   0, -12,   0,   0,   0,   0,   0,   0 },
+   {   0,   0,   0,   0,   0,   0,   0,   0,   0, -13, -13,   0,   0, -13,   0,   0,   0,   0,   0,   0 },
+   {   0,   0,   0,   0,   0,   0,   0,   0,   0, -14, -14,   0,   0, -14,   0,   0,   0,   0,   0,   0 },
+   {   0,   0,   0,   0,   0,   0,   0,   0,   0, -15, -15,   0,   0, -15,   0,   0,   0,   0,   0,   0 },
+   {   0,   0,   0,   0,   0,   0,   0,   0,   0, -16, -16,   0,   0, -16,   0,   0,   0,   0,   0,   0 },
+   {   0,   0,   0,   0,   0,   0,   0,   0,   0, -17, -17,   0,   0, -17,   0,   0,   0,   0,   0,   0 },
+   {   0,   0,   0,   0,   0,   0,   0,   0,   0,  -5,  -5,   0,  -5,  -5,   0,   0,   0,   0,   0,   0 },
+   {   0,   0,   0,   0,  25,   8,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   9,   0,   0 },
+   {   0,   0,  16,  15,   0,   0,   0,  26,   3,   0,   0,   0,   5,   0,  17,  18,  19,  13,  14,   0 },
+   {   0,   0,   0,   0,   0,   0,   0,   0,   0,  -3,  -3,   0,   0,  -3,   0,   0,   0,   0,   0,  -3 },
+   {   0,   0,  16,  15,   0,   0,  27,  12,   3,   0,   0,   0,   5,   0,  17,  18,  19,  13,  14,   0 },
+   {   0,   0,   0,   0,   0,   0,   0,   0,   0,  -7,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0 },
+   {   0,   0,   0,   0,   0,   0,   0,   0,   0,  -8,  -8,   0,   0,   0,   0,   0,   0,   0,   0,   0 },
+   {   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0, -10,   0,   0,   0,   0,   0,   0 },
+};
+
+static int production[] = {
+   1,   2,   2,   3,   2,   3,   1,   3,   3,   1,   3,   1,   1,   1,   1,   1,   1,   1
+};
+
+static int group_table[] ={
+   0,   1,   2,   2,   3,   3,   4,   4,   5,   6,   6,   7,   7,   7,   7,   7,   7,   7
+};
+
+static std::map<jsonhead::json_token, int> symbol_table = 
+{
+  /* Non-Terminals */
+  {          jsonhead::json_token::none,   0 },
+  {          jsonhead::json_token::none,   1 },
+  {          jsonhead::json_token::none,   2 },
+  {          jsonhead::json_token::none,   3 },
+  {          jsonhead::json_token::none,   4 },
+  {          jsonhead::json_token::none,   5 },
+  {          jsonhead::json_token::none,   6 },
+  {          jsonhead::json_token::none,   7 },
+
+  /* Terminals */
+  { jsonhead::json_token::object_starts,   8 },
+  {   jsonhead::json_token::object_ends,   9 },
+  {       jsonhead::json_token::v_comma,  10 },
+  {        jsonhead::json_token::v_pair,  11 },
+  {  jsonhead::json_token::array_starts,  12 },
+  {    jsonhead::json_token::array_ends,  13 },
+  {        jsonhead::json_token::v_true,  14 },
+  {       jsonhead::json_token::v_false,  15 },
+  {        jsonhead::json_token::v_null,  16 },
+  {      jsonhead::json_token::v_string,  17 },
+  {      jsonhead::json_token::v_number,  18 },
+  {           jsonhead::json_token::eof,  19 },
+};
+
+static jsonhead::json_token symbol_index[] = {
+           jsonhead::json_token::none,
+           jsonhead::json_token::none,
+           jsonhead::json_token::none,
+           jsonhead::json_token::none,
+           jsonhead::json_token::none,
+           jsonhead::json_token::none,
+           jsonhead::json_token::none,
+           jsonhead::json_token::none,
+  jsonhead::json_token::object_starts,
+    jsonhead::json_token::object_ends,
+        jsonhead::json_token::v_comma,
+         jsonhead::json_token::v_pair,
+   jsonhead::json_token::array_starts,
+     jsonhead::json_token::array_ends,
+         jsonhead::json_token::v_true,
+        jsonhead::json_token::v_false,
+         jsonhead::json_token::v_null,
+       jsonhead::json_token::v_string,
+       jsonhead::json_token::v_number,
+            jsonhead::json_token::eof,
+};
+
+#define ACCEPT_INDEX 28
+
 jsonhead::json_parser::json_parser(std::string file_path)
   : lex(file_path) {
 }
 
+#if 0
 bool jsonhead::json_parser::step() {
   if (!lex.next()) return false;
 
@@ -258,4 +363,55 @@ bool jsonhead::json_parser::step() {
   }
 
   return true;
+}
+#endif
+
+bool jsonhead::json_parser::step() {
+  if (!lex.next()) return false;
+
+REDUCE:
+
+  if (stack.empty())
+    stack.push(0);
+
+  bool require_reduce = false;
+  int symbol = symbol_table[lex.type];
+  int code = goto_table[stack.top()][symbol];
+
+  if (code > 0)
+  {
+    // Shift
+    stack.push(code);
+  }
+  else if (code < 0)
+  {
+    // Reduce
+    reduce(code);
+    goto REDUCE;
+  }
+  else if (code == ACCEPT_INDEX)
+  {
+    // End of json format
+    return false;
+  }
+  else
+  {
+    // Panic mode
+    this->error = true;
+    return false;
+  }
+
+  return true;
+}
+
+void jsonhead::json_parser::reduce(int code)
+{
+  int reduce_production = -code;
+
+  // Reduce Stack
+  for (int i = 0; i < production[reduce_production]; i++) {
+    stack.pop();
+  }
+
+  stack.push(goto_table[stack.top()][group_table[reduce_production]]);
 }

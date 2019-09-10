@@ -143,9 +143,14 @@ public:
   bool error() const { return error; }
 
 private:
+#if 0
   std::stack<ofw::String> keys;
   std::stack<jvalue> stack;
   std::stack<json_token> token;
+#endif
+
+  std::stack<int> stack;
+  void reduce(int code);
 };
 
 }
