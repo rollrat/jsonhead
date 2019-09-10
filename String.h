@@ -12,6 +12,7 @@
 #define _STRING_9bf1541fdf7efd41b7b39543fd870ac4_
 
 #include <stdint.h>
+#include <cstring>
 
 // Get a pointer type can be sure.
 #if defined(__x86_64__) || defined(__ia64__) || defined(_M_AMD64) \
@@ -75,12 +76,12 @@ public:
     }
   }
 
-  template<typename type>
-  void _class_delete(type&, type*&)
+  template<typename tt> 
+  void _class_delete(tt&, tt*&)
   {
   }
-  template<typename type>
-  void _class_delete(type*&, type* const*& arr)
+  template<typename tt>
+  void _class_delete(tt*&, tt* const*& arr)
   {
     for (size_t i = 0; i < m_size; i++)
     {
@@ -242,11 +243,11 @@ public:
   inline const char *Reference() const { return first; }
   
   inline size_t CompareTo(const char *str) const 
-  { return strcmp(first, str); }
+  { return ::strcmp(first, str); }
   inline size_t CompareTo(const String& refer) const 
   { return CompareTo(refer.first); }
   inline static int Comparer(const String& r1, const String &r2) 
-  { return strcmp(r1.first, r2.first); }
+  { return ::strcmp(r1.first, r2.first); }
 
   inline bool Equal(const String& refer) const
   {
@@ -337,9 +338,9 @@ public:
   String operator+(const String& concat)
   { return this->Concat(*this, concat); }
   inline bool operator>(const String& compare)
-  { return strcmp(first, compare.first) > 0; }
+  { return ::strcmp(first, compare.first) > 0; }
   inline bool operator<(const String& compare)
-  { return strcmp(first, compare.first) < 0; }
+  { return ::strcmp(first, compare.first) < 0; }
   inline bool operator>=(const String& compare)
   { return !this->operator<(compare); }
   inline bool operator<=(const String& compare)

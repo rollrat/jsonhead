@@ -28,17 +28,24 @@ namespace jsonhead {
 typedef enum class _json_token
 {
   none,
-  v_number,          // \-?(0|[1-9]\d*)(\.\d+)?([Ee][+-]?\d+)?
-  v_string,          // "(\\(["/bfnrt]|u{Hex}{Hex}{Hex}{Hex}))*"
-  v_comma=',',       // ,
-  v_pair=':',        // :
-  v_true,            // true
-  v_false,           // false
-  v_null,            // null
-  object_starts='{', // {
-  object_ends='}',   // }
-  array_starts='[',  // [
-  array_ends=']',    // ]
+  json_nt_json,
+  json_nt_object,
+  json_nt_members,
+  json_nt_pair,
+  json_nt_array,
+  json_nt_elements,
+  json_nt_value,
+  v_number,      // \-?(0|[1-9]\d*)(\.\d+)?([Ee][+-]?\d+)?
+  v_string,      // "(\\(["/bfnrt]|u{Hex}{Hex}{Hex}{Hex}))*"
+  v_comma,       // ,
+  v_pair,        // :
+  v_true,        // true
+  v_false,       // false
+  v_null,        // null
+  object_starts, // {
+  object_ends,   // }
+  array_starts,  // [
+  array_ends,    // ]
   eof,
 } json_token;
 
