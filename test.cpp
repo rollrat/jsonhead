@@ -25,6 +25,8 @@ int main()
   long long count = 0;
   while (lexer.next())
   {
+    if(lexer.type() == jsonhead::json_token::eof)
+      break;
     count++;
     if (count % 100000 == 0) {
       cout << lexer.stream().tellg() << '/' << tsz << '(' << ((double)lexer.stream().tellg() / tsz * 100.0) << ')' << '\n';
