@@ -16,8 +16,8 @@ using namespace std;
 
 int main()
 {
-  auto fn =  R"(C:\Users\rollrat\Desktop\namuwiki190312\namuwiki_20190312.json)";
-  //auto fn = R"(C:\Dev\koromo-copy\Koromo Copy UX\bin\Debug\hiddendata.json)";
+  auto fn = R"(/home/rollrat/github/jsonhead/namuwiki_20190312.json)";
+  //auto fn =  R"(C:\Users\rollrat\Desktop\namuwiki190312\namuwiki_20190312.json)";
 
   jsonhead::json_parser ps(fn);
   ps.skip_literal() = true;

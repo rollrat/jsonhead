@@ -9,6 +9,10 @@
 //===----------------------------------------------------------------------===//
 
 #include "WString.h"
+#include <memory.h>
+#include <wchar.h>
+#include <cmath>
+
 
 using namespace jsonhead;
 
@@ -301,6 +305,7 @@ void StringTools::wcsnset(wchar_t * ptr, wchar_t ch, size_t len)
 
 size_t StringTools::wcountch(wchar_t * ptr, wchar_t * last, wchar_t ch)
 {
+#ifdef _COMPILER_MS
   static_assert(sizeof(wchar_t) == 2, "Do not use 'wcountch' function!");
 
   size_t count = 0;
@@ -337,6 +342,9 @@ size_t StringTools::wcountch(wchar_t * ptr, wchar_t * last, wchar_t ch)
   }
 
   return count;
+#else
+  return -1;
+#endif
 }
 
 ///===-----------------------------------------------------------------------===
@@ -383,56 +391,56 @@ WString::WString(wchar_t ch)
 WString::WString(int num)
 {
   wchar_t buffer[65];
-  swprintf(buffer, L"%lld", num);
+  swprintf(buffer, 65, L"%lld", num);
   InitString((const wchar_t *)buffer);
 }
 
 WString::WString(long int num)
 {
   wchar_t buffer[65];
-  swprintf(buffer, L"%lld", num);
+  swprintf(buffer, 65, L"%lld", num);
   InitString((const wchar_t *)buffer);
 }
 
 WString::WString(long long int num)
 {
   wchar_t buffer[65];
-  swprintf(buffer, L"%lld", num);
+  swprintf(buffer, 65, L"%lld", num);
   InitString((const wchar_t *)buffer);
 }
 
 WString::WString(unsigned int num)
 {
   wchar_t buffer[65];
-  swprintf(buffer, L"%u", num);
+  swprintf(buffer, 65, L"%u", num);
   InitString((const wchar_t *)buffer);
 }
 
 WString::WString(unsigned long int num)
 {
   wchar_t buffer[65];
-  swprintf(buffer, L"%lu", num);
+  swprintf(buffer, 65, L"%lu", num);
   InitString((const wchar_t *)buffer);
 }
 
 WString::WString(unsigned long long int num)
 {
   wchar_t buffer[65];
-  swprintf(buffer, L"%llu", num);
+  swprintf(buffer, 65, L"%llu", num);
   InitString((const wchar_t *)buffer);
 }
 
 WString::WString(float num)
 {
   wchar_t buffer[65];
-  swprintf(buffer, L"%g", num);
+  swprintf(buffer, 65, L"%g", num);
   InitString((const wchar_t *)buffer);
 }
 
 WString::WString(double num)
 {
   wchar_t buffer[65];
-  swprintf(buffer, L"%lg", num);
+  swprintf(buffer, 65, L"%lg", num);
   InitString((const wchar_t *)buffer);
 }
 
@@ -782,8 +790,10 @@ WString WString::Repeat(size_t count)
 
 WString WString::Reverse()
 {
+  throw new std::runtime_error("this function not implemented!");
+
   wchar_t *ret = this->ToArray();
-  _wcsrev(ret);
+  //_wcsrev(ret);
   return WString(ret, length, false);
 }
 
@@ -1786,7 +1796,7 @@ WString WString::LineBreak(size_t len)
 {
   size_t remainLen = length % len;
   size_t fullinsertLen = length / len;
-  size_t countLine = fullinsertLen + (remainLen != 0); // ¸ðµç ÁÙ ¼ö
+  size_t countLine = fullinsertLen + (remainLen != 0); // ï¿½ï¿½ï¿½ ï¿½ï¿½ ï¿½ï¿½
 
   size_t totalLen = countLine * 2 - (countLine ? 2 : 0) + length;
 
@@ -1894,10 +1904,9 @@ char *WString::UnicodeToAnsi()
 
 void WString::InitString(const char *str)
 {
-  length = StringTools::strlen(str);
+  //length = StringTools::strlen(str);
   first = new wchar_t[length + 1];
-  size_t converted = 0;
-  mbstowcs_s(&converted, first, length + 1, str, SIZE_MAX);
+  mbstowcs(first, str, SIZE_MAX);
 }
 
 void WString::InitString(const wchar_t *str)
