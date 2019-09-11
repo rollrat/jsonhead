@@ -15,7 +15,7 @@
 
 #include "String.h"
 
-namespace ofw 
+namespace jsonhead 
 {
 
 class StringBuilder

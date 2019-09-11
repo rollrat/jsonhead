@@ -11,8 +11,8 @@
 #ifndef _JSONHEAD_
 #define _JSONHEAD_
 
-#include "WString.h"
-#include "WStringBuilder.h"
+#include "String.h"
+#include "StringBuilder.h"
 #include <algorithm>
 #include <fstream>
 #include <map>
@@ -51,16 +51,16 @@ typedef enum class _json_token {
 
 class json_lexer {
   json_token curtok;
-  WString curstr;
+  String curstr;
   
   long long file_size;
   long long read_size = 0;
   long long buffer_size;
   long long current_block_size = 0;
-  wchar_t *buffer;
-  wchar_t *pointer = nullptr;
+  char *buffer;
+  char *pointer = nullptr;
 
-  std::wifstream ifs;
+  std::ifstream ifs;
 
   bool appendable = true;
 
@@ -71,19 +71,22 @@ public:
   bool next();
 
   inline json_token type() const;
-  inline WString str();
+  inline String str();
 
-  const wchar_t *gbuffer() const;
+  const char *gbuffer() const;
 
-  std::wifstream &stream() { return ifs; }
+  std::ifstream &stream() { return ifs; }
 
   long long filesize() const { return file_size; }
   long long readsize() const { return read_size; }
 
+  long long position() const { return read_size - current_block_size + (pointer - buffer); }
+
 private:
   void buffer_refresh();
   bool require_refresh();
-  wchar_t next_ch();
+  char next_ch();
+  void prev();
 };
 
 class json_value {
@@ -98,7 +101,7 @@ public:
   bool is_string() const { return type == 3; }
   bool is_keyword() const { return type == 4; }
 
-  virtual std::wostream& operator<<(std::wostream& os) const = 0;
+  virtual std::ostream& print(std::ostream& os, bool format = false, std::string indent = "") const = 0;
 };
 
 using jvalue = std::shared_ptr<json_value>;
@@ -106,9 +109,9 @@ using jvalue = std::shared_ptr<json_value>;
 class json_object : public json_value {
 public:
   json_object() : json_value(0) {}
-  std::map<WString, jvalue> keyvalue;
+  std::map<String, jvalue> keyvalue;
 
-  virtual std::wostream& operator<<(std::wostream& os) const;
+  virtual std::ostream& print(std::ostream& os, bool format = false, std::string indent = "") const;
 };
 
 class json_array : public json_value {
@@ -116,7 +119,7 @@ public:
   json_array() : json_value(1) {}
   std::vector<jvalue> array;
 
-  virtual std::wostream& operator<<(std::wostream& os) const;
+  virtual std::ostream& print(std::ostream& os, bool format = false, std::string indent = "") const;
 };
 
 using jobject = std::shared_ptr<json_object>;
@@ -124,18 +127,18 @@ using jarray = std::shared_ptr<json_array>;
 
 class json_numeric : public json_value {
 public:
-  json_numeric(WString num) : json_value(2), numstr(std::move(num)) {}
-  WString numstr;
+  json_numeric(String num) : json_value(2), numstr(std::move(num)) {}
+  String numstr;
 
-  virtual std::wostream& operator<<(std::wostream& os) const;
+  virtual std::ostream& print(std::ostream& os, bool format = false, std::string indent = "") const;
 };
 
 class json_string : public json_value {
 public:
-  json_string(WString str) : json_value(3), str(std::move(str)) {}
-  WString str;
+  json_string(String str) : json_value(3), str(std::move(str)) {}
+  String str;
 
-  virtual std::wostream& operator<<(std::wostream& os) const;
+  virtual std::ostream& print(std::ostream& os, bool format = false, std::string indent = "") const;
 };
 
 class json_state : public json_value {
@@ -143,7 +146,7 @@ public:
   json_state(json_token token) : json_value(4), type(token) {}
   json_token type;
 
-  virtual std::wostream& operator<<(std::wostream& os) const;
+  virtual std::ostream& print(std::ostream& os, bool format = false, std::string indent = "") const;
 };
 
 class json_parser {
@@ -151,6 +154,7 @@ class json_parser {
   jvalue _entry;
   bool _skip_literal = false;
   bool _error = false;
+  bool _reduce = false;
 
 public:
   json_parser(std::string file_path);
@@ -161,8 +165,12 @@ public:
   
   long long filesize() const { return lex.filesize(); }
   long long readsize() const { return lex.readsize(); }
+  long long position() const { return lex.position(); }
 
   jvalue entry() { return _entry; }
+
+  bool reduce_before() { return _reduce; }
+  jvalue latest_reduce() { return values.top(); }
 
 private:
 #if 0
@@ -172,7 +180,7 @@ private:
   std::stack<json_token> token;
 #endif
 
-  std::stack<WString> contents;
+  std::stack<String> contents;
   std::stack<int> stack;
   std::stack<jvalue> values;
   void reduce(int code);

@@ -44,7 +44,7 @@ typedef uint32_t	ptr_type;
 #include <string>
 #include <iostream>
 
-namespace ofw
+namespace jsonhead
 {
   
 template<typename type>
@@ -334,17 +334,17 @@ public:
   char *ToAnsi();
   Utf8Array ToUtf8(bool file_bom = false);
 
-  String operator&(const String& concat)
+  String operator&(const String& concat) const
   { return this->Concat(*this, concat); }
-  String operator+(const String& concat)
+  String operator+(const String& concat) const
   { return this->Concat(*this, concat); }
-  inline bool operator>(const String& compare)
+  inline bool operator>(const String& compare) const
   { return ::strcmp(first, compare.first) > 0; }
-  inline bool operator<(const String& compare)
+  inline bool operator<(const String& compare) const
   { return ::strcmp(first, compare.first) < 0; }
-  inline bool operator>=(const String& compare)
+  inline bool operator>=(const String& compare) const
   { return !this->operator<(compare); }
-  inline bool operator<=(const String& compare)
+  inline bool operator<=(const String& compare) const
   { return !this->operator>(compare);  }
 
   void Swap(String& refer);
@@ -355,7 +355,7 @@ public:
 
   friend std::ostream& operator<<(std::ostream& os, const String& refer)
   {
-    if (refer.Null()) os << "Null-(0)";
+    if (refer.Null()); // os << "Null-(0)"; // nothing
     else os << refer.Reference();
     return os;
   }

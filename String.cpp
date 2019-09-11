@@ -18,7 +18,7 @@
 #include <wchar.h>
 #include <cmath>
 
-using namespace ofw;
+using namespace jsonhead;
 
 #define align_address(n) \
     ((ptr_type *)( (ptr_type)(n) & ~(ptr_type)( sizeof(ptr_type) - 1 ) ) + 1)
@@ -47,7 +47,7 @@ static const char *findzero(const char *str)
 /* this function provide counting string-length method by null-terminated string 
    but is too big, to use this function should be considered prior using.
    or you can make partition routines. */
-size_t ofw::StringTools::strlen(const char *str)
+size_t jsonhead::StringTools::strlen(const char *str)
 {
   if (sizeof(char) != 1)
     // Call built-in function.
@@ -131,7 +131,7 @@ size_t ofw::StringTools::strlen(const char *str)
 #endif
 }
 
-char *ofw::StringTools::strrnchr(char * ptr, size_t len, char ch)
+char *jsonhead::StringTools::strrnchr(char * ptr, size_t len, char ch)
 {
   static_assert(sizeof(char) == 1, 
     "The 'strrnchr' function is not supported on your environment.");
@@ -179,7 +179,7 @@ char *ofw::StringTools::strrnchr(char * ptr, size_t len, char ch)
   return nullptr;
 }
 
-char *ofw::StringTools::strrnstrn(char * ptr, size_t ptrlen, 
+char *jsonhead::StringTools::strrnstrn(char * ptr, size_t ptrlen, 
   const char * dest, size_t destlen)
 {
   char *tptr;
@@ -195,7 +195,7 @@ char *ofw::StringTools::strrnstrn(char * ptr, size_t ptrlen,
   return NULL;
 }
 
-void ofw::StringTools::strnset(char *ptr, wchar_t ch, size_t len) {
+void jsonhead::StringTools::strnset(char *ptr, wchar_t ch, size_t len) {
   char *trim = (char *)align_address(ptr);
 
   if (trim < ptr) trim = ptr;
@@ -231,7 +231,7 @@ void ofw::StringTools::strnset(char *ptr, wchar_t ch, size_t len) {
   }
 }
 
-size_t ofw::StringTools::strcountch(char * ptr, char * last, char ch)
+size_t jsonhead::StringTools::strcountch(char * ptr, char * last, char ch)
 {
   static_assert(sizeof(char) == 1, "Do not use 'wcountch' function!");
 
@@ -294,7 +294,7 @@ String::String(char ch, size_t count)
 {
   first = alloc(length + 1);
   last = first + length - 1;
-  ofw::StringTools::strnset(first, ch, count);
+  jsonhead::StringTools::strnset(first, ch, count);
   first[length] = 0; 
 }
 
@@ -620,7 +620,7 @@ String String::PadLeft(size_t len, char pad)
     char* ret = new char[len + 1];
     size_t   padlen = len - length;
 
-    ofw::StringTools::strnset(ret, pad, padlen);
+    jsonhead::StringTools::strnset(ret, pad, padlen);
     memcpy(ret + padlen, first, length * sizeof(char));
 
     ret[len] = 0;
@@ -640,7 +640,7 @@ String String::PadRight(size_t len, char pad)
     char *ret = new char[len + 1];
 
     memcpy(ret, first, length * sizeof(char));
-    ofw::StringTools::strnset(ret + length, pad, len - length);
+    jsonhead::StringTools::strnset(ret + length, pad, len - length);
 
     ret[len] = 0;
 
@@ -662,9 +662,9 @@ String String::PadCenter(size_t len, char pad, bool lefts)
 
     char *ret = new char[len + 1];
 
-    ofw::StringTools::strnset(ret, pad, lpadlen);
+    jsonhead::StringTools::strnset(ret, pad, lpadlen);
     memcpy(ret + lpadlen, first, length * sizeof(char));
-    ofw::StringTools::strnset(ret + lpadlen + length, pad, rpadlen);
+    jsonhead::StringTools::strnset(ret + lpadlen + length, pad, rpadlen);
 
     ret[len] = 0;
 
@@ -939,7 +939,7 @@ void String::Swap(String& refer)
   std::swap(length, refer.length);
 }
 
-String& ofw::String::operator=(String && refer)
+String& jsonhead::String::operator=(String && refer)
 {
   this->Swap(refer);
   refer.tm = this->tm;
@@ -1652,7 +1652,7 @@ String::ArrayType String::LineSplitHelper(size_t len, const char *front,
   {
     if (end_len)
     {
-      ofw::StringTools::strnset(n[countLineLen - 1]->first + front_len + 
+      jsonhead::StringTools::strnset(n[countLineLen - 1]->first + front_len + 
         remainLen, L' ', len - remainLen);
     }
     else

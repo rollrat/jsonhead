@@ -23,7 +23,7 @@ jsonhead::json_lexer::json_lexer(std::string file_path, long long buffer_size)
   file_size = ifs.tellg();
   ifs.seekg(0, std::ios::beg);
 
-  buffer = new wchar_t[buffer_size];
+  buffer = new char[buffer_size];
   memset(buffer, 0, buffer_size);
 
   if (!ifs)
@@ -36,7 +36,7 @@ jsonhead::json_lexer::~json_lexer() {
 }
 
 bool jsonhead::json_lexer::next() {
-  this->curstr = WString();
+  this->curstr = String();
   while (true) {
     auto cur = next_ch();
     if (cur == 0) {
@@ -46,58 +46,59 @@ bool jsonhead::json_lexer::next() {
 
     switch (cur)
     {
-    case L' ':
-    case L'\r':
-    case L'\n':
+    case ' ':
+    case '\r':
+    case '\n':
       continue;
 
-    case L',':
+    case ',':
       this->curtok = json_token::v_comma;
-      this->curstr = WString(cur, 1);
+      this->curstr = String(cur, 1);
       break;
 
-    case L':':
+    case ':':
       this->curtok = json_token::v_pair;
-      this->curstr = WString(cur, 1);
+      this->curstr = String(cur, 1);
       break;
 
-    case L'{':
+    case '{':
       this->curtok = json_token::object_starts;
-      this->curstr = WString(cur, 1);
+      this->curstr = String(cur, 1);
       break;
 
-    case L'}':
+    case '}':
       this->curtok = json_token::object_ends;
-      this->curstr = WString(cur, 1);
+      this->curstr = String(cur, 1);
       break;
 
-    case L'[':
+    case '[':
       this->curtok = json_token::array_starts;
-      this->curstr = WString(cur, 1);
+      this->curstr = String(cur, 1);
       break;
 
-    case L']':
+    case ']':
       this->curtok = json_token::array_ends;
-      this->curstr = WString(cur, 1);
+      this->curstr = String(cur, 1);
       break;
 
-    case L't':
-    case L'f':
-    case L'n':
+    case 't':
+    case 'f':
+    case 'n':
       {
-        WStringBuilder ss(10);
+        StringBuilder ss(10);
         while (cur && isalpha(cur))
         {
           ss.Append(cur);
           cur = next_ch();
         }
+        prev();
 
         auto s = ss.ToString();
-        if (s == L"true")
+        if (s == "true")
           this->curtok = json_token::v_true;
-        else if (s == L"false")
+        else if (s == "false")
           this->curtok = json_token::v_false;
-        else if (s == L"null")
+        else if (s == "nul")
           this->curtok = json_token::v_null;
         else
           return false;
@@ -106,9 +107,9 @@ bool jsonhead::json_lexer::next() {
       }
       break;
 
-    case L'"':
+    case '"':
       {
-        WStringBuilder ss;
+        StringBuilder ss;
 
         // donot parse \uXXXX unicode style character
         while (cur = next_ch())
@@ -117,6 +118,32 @@ bool jsonhead::json_lexer::next() {
 #if REAL_JSON
           // escapes
           if (1 <= cur && cur <= 19) return false;
+#endif
+#if !CONFIG_DISABLE_UTF8
+          // We will be support wide characters.
+          if (cur < 0) {
+            unsigned char cc = cur;
+            int len = 0;
+            if ((cc & 0xfc) == 0xfc) {
+              len = 6;
+            }
+            else if ((cc & 0xf8) == 0xf8) {
+              len = 5;
+            }
+            else if ((cc & 0xf0) == 0xf0) {
+              len = 4;
+            }
+            else if ((cc & 0xe0) == 0xe0) {
+              len = 3;
+            }
+            else if ((cc & 0xc0) == 0xc0) {
+              len = 2;
+            }
+            for (; --len; cur = next_ch())
+              ss.Append(cur);
+            ss.Append(cur);
+            continue;
+          }
 #endif
           ss.Append(cur);
           if (cur == '\\') {
@@ -134,9 +161,9 @@ bool jsonhead::json_lexer::next() {
 
     default:
       {
-        WStringBuilder ss;
+        StringBuilder ss;
 
-        if (cur == L'-') {
+        if (cur == '-') {
           ss.Append(cur);
           cur = next_ch();
         }
@@ -148,7 +175,7 @@ bool jsonhead::json_lexer::next() {
         }
         
         // [0-9]+.[0-9]+
-        if (cur && cur == L'.') {
+        if (cur && cur == '.') {
           cur = next_ch();
           if (!cur || !isdigit(cur))
             return false;
@@ -161,13 +188,13 @@ bool jsonhead::json_lexer::next() {
         
         // [0-9]+[Ee][+-]?[0-9]+
         // [0-9]+.[0-9]+[Ee][+-]?[0-9]+
-        if (cur && (cur == L'E' || cur == L'e')) {
+        if (cur && (cur == 'E' || cur == 'e')) {
           cur = next_ch();
           
-          if (!cur || !(cur == L'+' || cur == L'-' || isdigit(cur)))
+          if (!cur || !(cur == '+' || cur == '-' || isdigit(cur)))
             return false;
           
-          if (cur == L'+' || cur == L'-') {
+          if (cur == '+' || cur == '-') {
             ss.Append(cur);
             cur = next_ch();
           }
@@ -180,6 +207,7 @@ bool jsonhead::json_lexer::next() {
             cur = next_ch();
           }
         }
+        prev();
 
         curtok = json_token::v_number;
         curstr = ss.ToString();
@@ -194,11 +222,11 @@ jsonhead::json_token jsonhead::json_lexer::type() const {
   return this->curtok;
 }
 
-jsonhead::WString jsonhead::json_lexer::str() {
+jsonhead::String jsonhead::json_lexer::str() {
   return std::move(this->curstr);
 }
 
-const wchar_t *jsonhead::json_lexer::gbuffer() const {
+const char *jsonhead::json_lexer::gbuffer() const {
   return pointer;
 }
 
@@ -212,7 +240,7 @@ inline bool jsonhead::json_lexer::require_refresh() {
   return pointer == nullptr || buffer + current_block_size == pointer;
 }
 
-wchar_t jsonhead::json_lexer::next_ch() {
+char jsonhead::json_lexer::next_ch() {
   if (require_refresh()) {
     if (ifs.eof())
       return (char)0;
@@ -221,50 +249,99 @@ wchar_t jsonhead::json_lexer::next_ch() {
   return *pointer++;
 }
 
+void jsonhead::json_lexer::prev() {
+  pointer--;
+}
+
 ///===-----------------------------------------------------------------------===
 ///
 ///               Json Model
 ///
 ///===-----------------------------------------------------------------------===
 
-std::wostream& jsonhead::json_object::operator<<(std::wostream& os) const {
-  os << '{';
+std::ostream& jsonhead::json_object::print(std::ostream& os, bool format, std::string indent) const {
+  if (!format)
+    os << '{';
+  else
+    os << "{\n";
   for (auto it = keyvalue.begin(); it != keyvalue.end(); ++it) {
-    os << it->first << ':' << it->second;
-    if (std::next(it) != keyvalue.end())
-      os << ',';
+    if (!format) {
+      os << '\"' << it->first << "\":";
+      it->second->print(os);
+    }
+    else {
+      os << indent << "  \"" << it->first << "\": ";
+      it->second->print(os, true, indent + "  ");
+    }
+    if (std::next(it) != keyvalue.end()) {
+      if (!format)
+        os << ',';
+      else
+        os << ",\n";
+    }
   }
-  os << '}';
+  if (!format)
+    os << '}';
+  else
+    os << '\n' << indent << "}";
   return os;
 }
 
-std::wostream& jsonhead::json_array::operator<<(std::wostream& os) const {
-  os << '[';
-  for (auto it = array.begin(); it != array.end(); ++it) {
-    os << *it;
-    if (std::next(it) != array.end())
-      os << ',';
+std::ostream& jsonhead::json_array::print(std::ostream& os, bool format, std::string indent) const {
+  if (!format)
+    os << '[';
+  else
+    os << "[\n";
+  for (auto it = array.rbegin(); it != array.rend(); ++it) {
+    if (!format)
+      (*it)->print(os);
+    else {
+      os << indent << "  ";
+      (*it)->print(os, true, indent + "  ");
+    }
+    if (std::next(it) != array.rend()) {
+      if (!format)
+        os << ',';
+      else
+        os << ",\n";
+    }
   }
-  os << ']';
+
+  if (!format)
+    os << ']';
+  else
+    os << '\n' << indent << "]";
   return os;
 }
 
-std::wostream& jsonhead::json_numeric::operator<<(std::wostream& os) const {
+std::ostream& jsonhead::json_numeric::print(std::ostream& os, bool format, std::string indent) const {
   os << numstr;
   return os;
 }
 
-std::wostream& jsonhead::json_string::operator<<(std::wostream& os) const {
-  os << str;
+std::ostream& jsonhead::json_string::print(std::ostream& os, bool format, std::string indent) const {
+  os << '"' << str << '"';
   return os;
 }
 
-std::wostream& jsonhead::json_state::operator<<(std::wostream& os) const {
-  //switch (type) {
+std::ostream& jsonhead::json_state::print(std::ostream& os, bool format, std::string indent) const {
+  switch (type) 
+  {
+  case json_token::v_false:
+    os << "false";
+    break;
 
-  //}
+  case json_token::v_true:
+    os << "true";
+    break;
+
+  case json_token::v_null:
+    os << "null";
+    break;
+  }
   return os;
 }
+
 ///===-----------------------------------------------------------------------===
 ///
 ///               Json Parser
@@ -305,29 +382,6 @@ static int goto_table[][20] =
 
 static int production[] = {
    1,   1,   1,   2,   3,   2,   3,   1,   3,   3,   1,   3,   1,   1,   1,   1,   1,   1,   1
-};
-
-static int production_rules[][3] = 
-{
-  {   1 },
-  {   3 },
-  {   2 },
-  {  12,  13 },
-  {  12,   6,  13 },
-  {   8,   9 },
-  {   8,   4,   9 },
-  {   5 },
-  {   5,  10,   4 },
-  {  17,  11,   7 },
-  {   7 },
-  {   7,  10,   6 },
-  {  17 },
-  {  18 },
-  {   3 },
-  {   2 },
-  {  14 },
-  {  15 },
-  {  16 },
 };
 
 static int group_table[] ={
@@ -437,9 +491,9 @@ bool jsonhead::json_parser::step() {
 #endif
 
 bool jsonhead::json_parser::step() {
-  if (!lex.next()) return false;
-
-REDUCE:
+  if (!_reduce && !lex.next()) return false;
+   
+  _reduce = false;
 
   if (stack.empty())
     stack.push(0);
@@ -450,6 +504,8 @@ REDUCE:
   if (code == ACCEPT_INDEX)
   {
     // End of json format
+    _entry = values.top();
+    values.pop();
     return false;
   }
   else if (code > 0)
@@ -462,7 +518,7 @@ REDUCE:
   {
     // Reduce
     reduce(code);
-    goto REDUCE;
+    _reduce = true;
   }
   else
   {
@@ -507,11 +563,7 @@ void jsonhead::json_parser::reduce(int code)
 
   switch (reduce_production)
   {
-  case 0:
-    _entry = values.top();
-    values.pop();
-    break;
-
+  //case 0:
   //case 1:
   //case 2:
 
@@ -543,7 +595,7 @@ void jsonhead::json_parser::reduce(int code)
       if (!(_skip_literal && values.top()->is_string()))
         jo->keyvalue[contents.top()] = std::move(values.top());
       else
-        jo->keyvalue[contents.top()] = std::shared_ptr<json_string>(new json_string(std::move(WString())));
+        jo->keyvalue[contents.top()] = std::shared_ptr<json_string>(new json_string(std::move(String())));
       values.pop();
       values.push(jo);
       contents.pop();
@@ -557,7 +609,7 @@ void jsonhead::json_parser::reduce(int code)
       if (!(_skip_literal && values.top()->is_string()))
         ((json_object*)&*jo)->keyvalue[contents.top()] = std::move(values.top());
       else
-        ((json_object*)&*jo)->keyvalue[contents.top()] = std::shared_ptr<json_string>(new json_string(std::move(WString())));
+        ((json_object*)&*jo)->keyvalue[contents.top()] = std::shared_ptr<json_string>(new json_string(std::move(String())));
       values.pop();
       values.push(jo);
       contents.pop();
@@ -571,7 +623,8 @@ void jsonhead::json_parser::reduce(int code)
   case 10:
     {
       auto ja = jarray(new json_array());
-      ja->array.push_back(values.top());
+      if (!(_skip_literal && values.top()->is_string()))
+        ja->array.push_back(values.top());
       values.pop();
       values.push(ja);
     }
@@ -580,7 +633,8 @@ void jsonhead::json_parser::reduce(int code)
   case 11:
     {
       auto ja = values.top(); values.pop();
-      ((json_array*)&*ja)->array.push_back(values.top());
+      if (!(_skip_literal && values.top()->is_string()))
+        ((json_array*)&*ja)->array.push_back(values.top());
       values.pop();
       values.push(ja);
       contents.pop();
