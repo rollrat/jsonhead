@@ -16,7 +16,20 @@ using namespace std;
 
 int main()
 {
-  auto fn =  R"(/home/rollrat/github/jsonhead/namuwiki_20190312.json)";
+  auto fn =  R"(C:\Users\rollrat\Desktop\namuwiki190312\namuwiki_20190312.json)";
+  //auto fn = R"(C:\Dev\koromo-copy\Koromo Copy UX\bin\Debug\hiddendata.json)";
+
+  jsonhead::json_parser ps(fn);
+  ps.skip_literal() = true;
+  long long count = 0;
+  while (ps.step()) {
+    count++;
+    if (count % 100000 == 0) {
+      cout << ps.readsize() << '/' << ps.filesize() << '(' << ((long double)ps.readsize() / ps.filesize() * 100.0) << ')' << '\n';
+    }
+  }
+
+#if 0
   ifstream file(fn, ios::binary | ios::ate);
   long long tsz = file.tellg();
   file.close();
@@ -34,4 +47,7 @@ int main()
   }
 
   cout << count << '\n';
+#endif
+
+  cout << "and";
 }

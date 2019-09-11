@@ -17,9 +17,13 @@
 ///
 ///===-----------------------------------------------------------------------===
 
-jsonhead::json_lexer::json_lexer(std::string file_path, size_t buffer_size) 
+jsonhead::json_lexer::json_lexer(std::string file_path, long long buffer_size) 
   : ifs(file_path), curtok(json_token::none), buffer_size(buffer_size) {
-  buffer = new char[buffer_size];
+  ifs.seekg(0, std::ios::end);
+  file_size = ifs.tellg();
+  ifs.seekg(0, std::ios::beg);
+
+  buffer = new wchar_t[buffer_size];
   memset(buffer, 0, buffer_size);
 
   if (!ifs)
@@ -32,6 +36,7 @@ jsonhead::json_lexer::~json_lexer() {
 }
 
 bool jsonhead::json_lexer::next() {
+  this->curstr = WString();
   while (true) {
     auto cur = next_ch();
     if (cur == 0) {
@@ -41,26 +46,46 @@ bool jsonhead::json_lexer::next() {
 
     switch (cur)
     {
-    case ' ':
-    case '\r':
-    case '\n':
+    case L' ':
+    case L'\r':
+    case L'\n':
       continue;
 
-    case ',':
-    case ':':
-    case '{':
-    case '}':
-    case '[':
-    case ']':
-      this->curtok = (json_token)cur;
-      this->curstr = ofw::String(cur, 1);
+    case L',':
+      this->curtok = json_token::v_comma;
+      this->curstr = WString(cur, 1);
       break;
 
-    case 't':
-    case 'f':
-    case 'n':
+    case L':':
+      this->curtok = json_token::v_pair;
+      this->curstr = WString(cur, 1);
+      break;
+
+    case L'{':
+      this->curtok = json_token::object_starts;
+      this->curstr = WString(cur, 1);
+      break;
+
+    case L'}':
+      this->curtok = json_token::object_ends;
+      this->curstr = WString(cur, 1);
+      break;
+
+    case L'[':
+      this->curtok = json_token::array_starts;
+      this->curstr = WString(cur, 1);
+      break;
+
+    case L']':
+      this->curtok = json_token::array_ends;
+      this->curstr = WString(cur, 1);
+      break;
+
+    case L't':
+    case L'f':
+    case L'n':
       {
-        ofw::StringBuilder ss(10);
+        WStringBuilder ss(10);
         while (cur && isalpha(cur))
         {
           ss.Append(cur);
@@ -68,11 +93,11 @@ bool jsonhead::json_lexer::next() {
         }
 
         auto s = ss.ToString();
-        if (s == "true")
+        if (s == L"true")
           this->curtok = json_token::v_true;
-        else if (s == "false")
+        else if (s == L"false")
           this->curtok = json_token::v_false;
-        else if (s == "null")
+        else if (s == L"null")
           this->curtok = json_token::v_null;
         else
           return false;
@@ -81,9 +106,9 @@ bool jsonhead::json_lexer::next() {
       }
       break;
 
-    case '"':
+    case L'"':
       {
-        ofw::StringBuilder ss;
+        WStringBuilder ss;
 
         // donot parse \uXXXX unicode style character
         while (cur = next_ch())
@@ -109,9 +134,9 @@ bool jsonhead::json_lexer::next() {
 
     default:
       {
-        ofw::StringBuilder ss;
+        WStringBuilder ss;
 
-        if (cur == '-') {
+        if (cur == L'-') {
           ss.Append(cur);
           cur = next_ch();
         }
@@ -123,7 +148,7 @@ bool jsonhead::json_lexer::next() {
         }
         
         // [0-9]+.[0-9]+
-        if (cur && cur == '.') {
+        if (cur && cur == L'.') {
           cur = next_ch();
           if (!cur || !isdigit(cur))
             return false;
@@ -136,13 +161,13 @@ bool jsonhead::json_lexer::next() {
         
         // [0-9]+[Ee][+-]?[0-9]+
         // [0-9]+.[0-9]+[Ee][+-]?[0-9]+
-        if (cur && (cur == 'E' || cur == 'e')) {
+        if (cur && (cur == L'E' || cur == L'e')) {
           cur = next_ch();
           
-          if (!cur || !(cur == '+' || cur == '-' || isdigit(cur)))
+          if (!cur || !(cur == L'+' || cur == L'-' || isdigit(cur)))
             return false;
           
-          if (cur == '+' || cur == '-') {
+          if (cur == L'+' || cur == L'-') {
             ss.Append(cur);
             cur = next_ch();
           }
@@ -169,24 +194,25 @@ jsonhead::json_token jsonhead::json_lexer::type() const {
   return this->curtok;
 }
 
-ofw::String jsonhead::json_lexer::str() const {
-  return this->curstr;
+jsonhead::WString jsonhead::json_lexer::str() {
+  return std::move(this->curstr);
 }
 
-const char *jsonhead::json_lexer::gbuffer() const {
+const wchar_t *jsonhead::json_lexer::gbuffer() const {
   return pointer;
 }
 
-void jsonhead::json_lexer::buffer_refresh() {
+inline void jsonhead::json_lexer::buffer_refresh() {
   current_block_size = ifs.read(buffer, buffer_size).gcount();
+  read_size += current_block_size;
   pointer = buffer;
 }
 
-bool jsonhead::json_lexer::require_refresh() {
+inline bool jsonhead::json_lexer::require_refresh() {
   return pointer == nullptr || buffer + current_block_size == pointer;
 }
 
-char jsonhead::json_lexer::next_ch() {
+wchar_t jsonhead::json_lexer::next_ch() {
   if (require_refresh()) {
     if (ifs.eof())
       return (char)0;
@@ -201,52 +227,77 @@ char jsonhead::json_lexer::next_ch() {
 ///
 ///===-----------------------------------------------------------------------===
 
-static int goto_table[][20] = {
-   {   0,   1,   0,   2,   0,   0,   0,   0,   3,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0 },
-   {   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,  28 },
-   {   0,   0,   4,   0,   0,   0,   0,   0,   0,   0,   0,   0,   5,   0,   0,   0,   0,   0,   0,   0 },
-   {   0,   0,   0,   0,   7,   8,   0,   0,   0,   6,   0,   0,   0,   0,   0,   0,   0,   9,   0,   0 },
-   {   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,  -1 },
-   {   0,   0,  16,  15,   0,   0,  11,  12,   3,   0,   0,   0,   5,  10,  17,  18,  19,  13,  14,   0 },
-   {   0,   0,   0,   0,   0,   0,   0,   0,   0,  -4,  -4,   0,  -4,  -4,   0,   0,   0,   0,   0,   0 },
-   {   0,   0,   0,   0,   0,   0,   0,   0,   0,  20,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0 },
-   {   0,   0,   0,   0,   0,   0,   0,   0,   0,  -6,  21,   0,   0,   0,   0,   0,   0,   0,   0,   0 },
-   {   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,  22,   0,   0,   0,   0,   0,   0,   0,   0 },
-   {   0,   0,   0,   0,   0,   0,   0,   0,   0,  -2,  -2,   0,   0,  -2,   0,   0,   0,   0,   0,  -2 },
-   {   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,  23,   0,   0,   0,   0,   0,   0 },
-   {   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,  24,   0,   0,  -9,   0,   0,   0,   0,   0,   0 },
-   {   0,   0,   0,   0,   0,   0,   0,   0,   0, -11, -11,   0,   0, -11,   0,   0,   0,   0,   0,   0 },
-   {   0,   0,   0,   0,   0,   0,   0,   0,   0, -12, -12,   0,   0, -12,   0,   0,   0,   0,   0,   0 },
-   {   0,   0,   0,   0,   0,   0,   0,   0,   0, -13, -13,   0,   0, -13,   0,   0,   0,   0,   0,   0 },
-   {   0,   0,   0,   0,   0,   0,   0,   0,   0, -14, -14,   0,   0, -14,   0,   0,   0,   0,   0,   0 },
-   {   0,   0,   0,   0,   0,   0,   0,   0,   0, -15, -15,   0,   0, -15,   0,   0,   0,   0,   0,   0 },
-   {   0,   0,   0,   0,   0,   0,   0,   0,   0, -16, -16,   0,   0, -16,   0,   0,   0,   0,   0,   0 },
-   {   0,   0,   0,   0,   0,   0,   0,   0,   0, -17, -17,   0,   0, -17,   0,   0,   0,   0,   0,   0 },
-   {   0,   0,   0,   0,   0,   0,   0,   0,   0,  -5,  -5,   0,  -5,  -5,   0,   0,   0,   0,   0,   0 },
-   {   0,   0,   0,   0,  25,   8,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   9,   0,   0 },
-   {   0,   0,  16,  15,   0,   0,   0,  26,   3,   0,   0,   0,   5,   0,  17,  18,  19,  13,  14,   0 },
-   {   0,   0,   0,   0,   0,   0,   0,   0,   0,  -3,  -3,   0,   0,  -3,   0,   0,   0,   0,   0,  -3 },
-   {   0,   0,  16,  15,   0,   0,  27,  12,   3,   0,   0,   0,   5,   0,  17,  18,  19,  13,  14,   0 },
-   {   0,   0,   0,   0,   0,   0,   0,   0,   0,  -7,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0 },
-   {   0,   0,   0,   0,   0,   0,   0,   0,   0,  -8,  -8,   0,   0,   0,   0,   0,   0,   0,   0,   0 },
-   {   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0, -10,   0,   0,   0,   0,   0,   0 },
+static int goto_table[][20] = 
+{
+  {   0,   1,   3,   2,   0,   0,   0,   0,   4,   0,   0,   0,   5,   0,   0,   0,   0,   0,   0,   0 },
+  {   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,  28 },
+  {   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,  -1 },
+  {   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,  -2 },
+  {   0,   0,   0,   0,   7,   8,   0,   0,   0,   6,   0,   0,   0,   0,   0,   0,   0,   9,   0,   0 },
+  {   0,   0,  16,  15,   0,   0,  11,  12,   4,   0,   0,   0,   5,  10,  17,  18,  19,  13,  14,   0 },
+  {   0,   0,   0,   0,   0,   0,   0,   0,   0,  -5,  -5,   0,   0,  -5,   0,   0,   0,   0,   0,  -5 },
+  {   0,   0,   0,   0,   0,   0,   0,   0,   0,  20,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0 },
+  {   0,   0,   0,   0,   0,   0,   0,   0,   0,  -7,  21,   0,   0,   0,   0,   0,   0,   0,   0,   0 },
+  {   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,  22,   0,   0,   0,   0,   0,   0,   0,   0 },
+  {   0,   0,   0,   0,   0,   0,   0,   0,   0,  -3,  -3,   0,   0,  -3,   0,   0,   0,   0,   0,  -3 },
+  {   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,  23,   0,   0,   0,   0,   0,   0 },
+  {   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,  24,   0,   0, -10,   0,   0,   0,   0,   0,   0 },
+  {   0,   0,   0,   0,   0,   0,   0,   0,   0, -12, -12,   0,   0, -12,   0,   0,   0,   0,   0,   0 },
+  {   0,   0,   0,   0,   0,   0,   0,   0,   0, -13, -13,   0,   0, -13,   0,   0,   0,   0,   0,   0 },
+  {   0,   0,   0,   0,   0,   0,   0,   0,   0, -14, -14,   0,   0, -14,   0,   0,   0,   0,   0,   0 },
+  {   0,   0,   0,   0,   0,   0,   0,   0,   0, -15, -15,   0,   0, -15,   0,   0,   0,   0,   0,   0 },
+  {   0,   0,   0,   0,   0,   0,   0,   0,   0, -16, -16,   0,   0, -16,   0,   0,   0,   0,   0,   0 },
+  {   0,   0,   0,   0,   0,   0,   0,   0,   0, -17, -17,   0,   0, -17,   0,   0,   0,   0,   0,   0 },
+  {   0,   0,   0,   0,   0,   0,   0,   0,   0, -18, -18,   0,   0, -18,   0,   0,   0,   0,   0,   0 },
+  {   0,   0,   0,   0,   0,   0,   0,   0,   0,  -6,  -6,   0,   0,  -6,   0,   0,   0,   0,   0,  -6 },
+  {   0,   0,   0,   0,  25,   8,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   9,   0,   0 },
+  {   0,   0,  16,  15,   0,   0,   0,  26,   4,   0,   0,   0,   5,   0,  17,  18,  19,  13,  14,   0 },
+  {   0,   0,   0,   0,   0,   0,   0,   0,   0,  -4,  -4,   0,   0,  -4,   0,   0,   0,   0,   0,  -4 },
+  {   0,   0,  16,  15,   0,   0,  27,  12,   4,   0,   0,   0,   5,   0,  17,  18,  19,  13,  14,   0 },
+  {   0,   0,   0,   0,   0,   0,   0,   0,   0,  -8,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0 },
+  {   0,   0,   0,   0,   0,   0,   0,   0,   0,  -9,  -9,   0,   0,   0,   0,   0,   0,   0,   0,   0 },
+  {   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0, -11,   0,   0,   0,   0,   0,   0 },
 };
 
 static int production[] = {
-   1,   2,   2,   3,   2,   3,   1,   3,   3,   1,   3,   1,   1,   1,   1,   1,   1,   1
+   1,   1,   1,   2,   3,   2,   3,   1,   3,   3,   1,   3,   1,   1,   1,   1,   1,   1,   1
+};
+
+static int production_rules[][3] = 
+{
+  {   1 },
+  {   3 },
+  {   2 },
+  {  12,  13 },
+  {  12,   6,  13 },
+  {   8,   9 },
+  {   8,   4,   9 },
+  {   5 },
+  {   5,  10,   4 },
+  {  17,  11,   7 },
+  {   7 },
+  {   7,  10,   6 },
+  {  17 },
+  {  18 },
+  {   3 },
+  {   2 },
+  {  14 },
+  {  15 },
+  {  16 },
 };
 
 static int group_table[] ={
-   0,   1,   2,   2,   3,   3,   4,   4,   5,   6,   6,   7,   7,   7,   7,   7,   7,   7
+   0,   1,   1,   2,   2,   3,   3,   4,   4,   5,   6,   6,   7,   7,   7,   7,   7,   7,   7
 };
 
-static jsonhead::json_token symbol_index[] = {
+static jsonhead::json_token symbol_index[] = 
+{
               jsonhead::json_token::none,
       jsonhead::json_token::json_nt_json,
+     jsonhead::json_token::json_nt_array,
     jsonhead::json_token::json_nt_object,
    jsonhead::json_token::json_nt_members,
       jsonhead::json_token::json_nt_pair,
-     jsonhead::json_token::json_nt_array,
   jsonhead::json_token::json_nt_elements,
      jsonhead::json_token::json_nt_value, 
 
@@ -352,21 +403,22 @@ REDUCE:
   bool require_reduce = false;
   int code = goto_table[stack.top()][(int)lex.type()];
 
-  if (code > 0)
+  if (code == ACCEPT_INDEX)
+  {
+    // End of json format
+    return false;
+  }
+  else if (code > 0)
   {
     // Shift
     stack.push(code);
+    contents.push(lex.str());
   }
   else if (code < 0)
   {
     // Reduce
     reduce(code);
     goto REDUCE;
-  }
-  else if (code == ACCEPT_INDEX)
-  {
-    // End of json format
-    return false;
   }
   else
   {
@@ -388,4 +440,135 @@ void jsonhead::json_parser::reduce(int code)
   }
 
   stack.push(goto_table[stack.top()][group_table[reduce_production]]);
+
+  //   0:         S' -> JSON
+  //   1:       JSON -> OBJECT
+  //   2:       JSON -> ARRAY
+  //   3:      ARRAY -> [ ]
+  //   4:      ARRAY -> [ ELEMENTS ]
+  //   5:     OBJECT -> { }
+  //   6:     OBJECT -> { MEMBERS }
+  //   7:    MEMBERS -> PAIR
+  //   8:    MEMBERS -> PAIR , MEMBERS
+  //   9:       PAIR -> v_string : VALUE
+  //  10:   ELEMENTS -> VALUE
+  //  11:   ELEMENTS -> VALUE , ELEMENTS
+  //  12:      VALUE -> v_string
+  //  13:      VALUE -> v_number
+  //  14:      VALUE -> OBJECT
+  //  15:      VALUE -> ARRAY
+  //  16:      VALUE -> true
+  //  17:      VALUE -> false
+  //  18:      VALUE -> null
+
+  switch (reduce_production)
+  {
+  case 0:
+    entry = values.top();
+    values.pop();
+    break;
+
+  //case 1:
+  //case 2:
+
+  case 3:
+    contents.pop();
+    contents.pop();
+    values.push(jarray(new json_array));
+    break;
+
+  case 4:
+    contents.pop();
+    contents.pop();
+    break;
+
+  case 5:
+    contents.pop();
+    contents.pop();
+    values.push(jobject(new json_object()));
+    break;
+
+  case 6:
+    contents.pop();
+    contents.pop();
+    break;
+
+  case 7:
+    {
+      auto jo = jobject(new json_object());
+      if (!(_skip_literal && values.top()->is_string()))
+        jo->keyvalue[contents.top()] = std::move(values.top());
+      else
+        jo->keyvalue[contents.top()] = std::shared_ptr<json_string>(new json_string(std::move(WString())));
+      values.pop();
+      values.push(jo);
+      contents.pop();
+    }
+    break;
+
+  case 8:
+    {
+      contents.pop();
+      auto jo = values.top(); values.pop();
+      if (!(_skip_literal && values.top()->is_string()))
+        ((json_object*)&*jo)->keyvalue[contents.top()] = std::move(values.top());
+      else
+        ((json_object*)&*jo)->keyvalue[contents.top()] = std::shared_ptr<json_string>(new json_string(std::move(WString())));
+      values.pop();
+      values.push(jo);
+      contents.pop();
+    }
+    break;
+
+  case 9:
+    contents.pop();
+    break;
+
+  case 10:
+    {
+      auto ja = jarray(new json_array());
+      ja->array.push_back(values.top());
+      values.pop();
+      values.push(ja);
+    }
+    break;
+
+  case 11:
+    {
+      auto ja = values.top(); values.pop();
+      ((json_array*)&*ja)->array.push_back(values.top());
+      values.pop();
+      values.push(ja);
+      contents.pop();
+    }
+    break;
+
+  case 12:
+    values.push(std::shared_ptr<json_string>(new json_string(contents.top())));
+    contents.pop();
+    break;
+
+  case 13:
+    values.push(std::shared_ptr<json_numeric>(new json_numeric(contents.top())));
+    contents.pop();
+    break;
+
+  //case 14:
+  //case 15:
+
+  case 16:
+    values.push(std::shared_ptr<json_state>(new json_state(jsonhead::json_token::v_true)));
+    contents.pop();
+    break;
+
+  case 17:
+    values.push(std::shared_ptr<json_state>(new json_state(jsonhead::json_token::v_false)));
+    contents.pop();
+    break;
+
+  case 18:
+    values.push(std::shared_ptr<json_state>(new json_state(jsonhead::json_token::v_null)));
+    contents.pop();
+    break;
+  }
 }
