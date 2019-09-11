@@ -50,7 +50,8 @@ void WStringBuilder::Append(wchar_t ch)
   Ensure();
 
   if (m_last->m_length == capacity - 1)
-    Expand();
+    if (Expand())
+      Ensure();
 
   m_last->m_ptr[m_last->m_length++] = ch;
 }

@@ -21,6 +21,7 @@
 #include <string>
 #include <tuple>
 #include <vector>
+#include <ostream>
 
 namespace jsonhead {
 
@@ -96,6 +97,8 @@ public:
   bool is_numberic() const { return type == 2; }
   bool is_string() const { return type == 3; }
   bool is_keyword() const { return type == 4; }
+
+  virtual std::wostream& operator<<(std::wostream& os) const = 0;
 };
 
 using jvalue = std::shared_ptr<json_value>;
@@ -104,12 +107,16 @@ class json_object : public json_value {
 public:
   json_object() : json_value(0) {}
   std::map<WString, jvalue> keyvalue;
+
+  virtual std::wostream& operator<<(std::wostream& os) const;
 };
 
 class json_array : public json_value {
 public:
   json_array() : json_value(1) {}
   std::vector<jvalue> array;
+
+  virtual std::wostream& operator<<(std::wostream& os) const;
 };
 
 using jobject = std::shared_ptr<json_object>;
@@ -119,23 +126,29 @@ class json_numeric : public json_value {
 public:
   json_numeric(WString num) : json_value(2), numstr(std::move(num)) {}
   WString numstr;
+
+  virtual std::wostream& operator<<(std::wostream& os) const;
 };
 
 class json_string : public json_value {
 public:
   json_string(WString str) : json_value(3), str(std::move(str)) {}
   WString str;
+
+  virtual std::wostream& operator<<(std::wostream& os) const;
 };
 
 class json_state : public json_value {
 public:
   json_state(json_token token) : json_value(4), type(token) {}
   json_token type;
+
+  virtual std::wostream& operator<<(std::wostream& os) const;
 };
 
 class json_parser {
   json_lexer lex;
-  jvalue entry;
+  jvalue _entry;
   bool _skip_literal = false;
   bool _error = false;
 
@@ -148,6 +161,8 @@ public:
   
   long long filesize() const { return lex.filesize(); }
   long long readsize() const { return lex.readsize(); }
+
+  jvalue entry() { return _entry; }
 
 private:
 #if 0

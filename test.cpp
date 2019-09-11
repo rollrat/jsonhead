@@ -29,6 +29,8 @@ int main()
     }
   }
 
+  *ps.entry().get() << wcout;
+
 #if 0
   ifstream file(fn, ios::binary | ios::ate);
   long long tsz = file.tellg();

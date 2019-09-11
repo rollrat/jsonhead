@@ -223,6 +223,50 @@ wchar_t jsonhead::json_lexer::next_ch() {
 
 ///===-----------------------------------------------------------------------===
 ///
+///               Json Model
+///
+///===-----------------------------------------------------------------------===
+
+std::wostream& jsonhead::json_object::operator<<(std::wostream& os) const {
+  os << '{';
+  for (auto it = keyvalue.begin(); it != keyvalue.end(); ++it) {
+    os << it->first << ':' << it->second;
+    if (std::next(it) != keyvalue.end())
+      os << ',';
+  }
+  os << '}';
+  return os;
+}
+
+std::wostream& jsonhead::json_array::operator<<(std::wostream& os) const {
+  os << '[';
+  for (auto it = array.begin(); it != array.end(); ++it) {
+    os << *it;
+    if (std::next(it) != array.end())
+      os << ',';
+  }
+  os << ']';
+  return os;
+}
+
+std::wostream& jsonhead::json_numeric::operator<<(std::wostream& os) const {
+  os << numstr;
+  return os;
+}
+
+std::wostream& jsonhead::json_string::operator<<(std::wostream& os) const {
+  os << str;
+  return os;
+}
+
+std::wostream& jsonhead::json_state::operator<<(std::wostream& os) const {
+  //switch (type) {
+
+  //}
+  return os;
+}
+///===-----------------------------------------------------------------------===
+///
 ///               Json Parser
 ///
 ///===-----------------------------------------------------------------------===
@@ -464,7 +508,7 @@ void jsonhead::json_parser::reduce(int code)
   switch (reduce_production)
   {
   case 0:
-    entry = values.top();
+    _entry = values.top();
     values.pop();
     break;
 
