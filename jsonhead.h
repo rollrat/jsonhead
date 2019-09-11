@@ -49,6 +49,41 @@ typedef enum class _json_token {
   error,
 } json_token;
 
+template<typename type>
+class json_allocator {
+  size_t capacity;
+  
+  using pointer = type *;
+  using value_size = /*alignas(alignof(type))*/ unsigned char[sizeof(type)];
+
+  class allocator_node {
+  public:
+    typename value_size value;
+    pointer rep() { return reinterpret_cast<pointer>(value); }
+  };
+
+  std::vector<std::unique_ptr<allocator_node[]>> alloc;
+  int count;
+
+public:
+
+  json_allocator(size_t capacity) : capacity(capacity), count(0) {
+    alloc.push_back(std::unique_ptr<allocator_node[]>(std::move(new allocator_node[capacity])));
+    count = 0;
+  }
+
+  template <typename... Args>
+  pointer allocate(Args&& ... args) {
+    if (count == capacity) {
+      alloc.push_back(std::unique_ptr<allocator_node[]>(std::move(new allocator_node[capacity])));
+      count = 0;
+    }
+    pointer ptr = alloc.back()[count++].rep();
+    new (ptr) type(std::forward<Args>(args)...);
+    return ptr;
+  }
+};
+
 class json_lexer {
   json_token curtok;
   String curstr;
@@ -104,7 +139,7 @@ public:
   virtual std::ostream& print(std::ostream& os, bool format = false, std::string indent = "") const = 0;
 };
 
-using jvalue = std::shared_ptr<json_value>;
+using jvalue = json_value*;
 
 class json_object : public json_value {
 public:
@@ -122,8 +157,8 @@ public:
   virtual std::ostream& print(std::ostream& os, bool format = false, std::string indent = "") const;
 };
 
-using jobject = std::shared_ptr<json_object>;
-using jarray = std::shared_ptr<json_array>;
+using jobject = json_object*;
+using jarray = json_array*;
 
 class json_numeric : public json_value {
 public:
@@ -155,9 +190,12 @@ class json_parser {
   bool _skip_literal = false;
   bool _error = false;
   bool _reduce = false;
+  json_allocator<json_array> jarray_pool;
+  json_allocator<json_object> jobject_pool;
+  json_allocator<json_string> jstring_pool;
 
 public:
-  json_parser(std::string file_path);
+  json_parser(std::string file_path, size_t pool_capacity = 1024 * 256);
 
   bool step();
   bool &skip_literal() { return _skip_literal; }

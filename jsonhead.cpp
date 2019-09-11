@@ -415,8 +415,8 @@ static jsonhead::json_token symbol_index[] =
 
 #define ACCEPT_INDEX 28
 
-jsonhead::json_parser::json_parser(std::string file_path)
-  : lex(file_path) {
+jsonhead::json_parser::json_parser(std::string file_path, size_t pool_capacity)
+  : lex(file_path), jarray_pool(pool_capacity), jobject_pool(pool_capacity), jstring_pool(pool_capacity) {
 }
 
 bool jsonhead::json_parser::step() {
@@ -499,7 +499,7 @@ void jsonhead::json_parser::reduce(int code)
   case 3:
     contents.pop();
     contents.pop();
-    values.push(jarray(new json_array));
+    values.push(jarray(jarray_pool.allocate()));
     break;
 
   case 4:
@@ -510,7 +510,7 @@ void jsonhead::json_parser::reduce(int code)
   case 5:
     contents.pop();
     contents.pop();
-    values.push(jobject(new json_object()));
+    values.push(jobject(jobject_pool.allocate()));
     break;
 
   case 6:
@@ -520,11 +520,11 @@ void jsonhead::json_parser::reduce(int code)
 
   case 7:
     {
-      auto jo = jobject(new json_object());
+      auto jo = jobject(jobject_pool.allocate());
       if (!(_skip_literal && values.top()->is_string()))
         jo->keyvalue[contents.top()] = std::move(values.top());
       else
-        jo->keyvalue[contents.top()] = std::shared_ptr<json_string>(new json_string(std::move(String())));
+        jo->keyvalue[contents.top()] = jstring_pool.allocate(std::move(String()));
       values.pop();
       values.push(jo);
       contents.pop();
@@ -538,7 +538,7 @@ void jsonhead::json_parser::reduce(int code)
       if (!(_skip_literal && values.top()->is_string()))
         ((json_object*)&*jo)->keyvalue[contents.top()] = std::move(values.top());
       else
-        ((json_object*)&*jo)->keyvalue[contents.top()] = std::shared_ptr<json_string>(new json_string(std::move(String())));
+        ((json_object*)&*jo)->keyvalue[contents.top()] = jstring_pool.allocate(std::move(String()));
       values.pop();
       values.push(jo);
       contents.pop();
@@ -551,7 +551,7 @@ void jsonhead::json_parser::reduce(int code)
 
   case 10:
     {
-      auto ja = jarray(new json_array());
+      auto ja = jarray(jarray_pool.allocate());
       if (!(_skip_literal && values.top()->is_string()))
         ja->array.push_back(values.top());
       values.pop();
@@ -571,12 +571,12 @@ void jsonhead::json_parser::reduce(int code)
     break;
 
   case 12:
-    values.push(std::shared_ptr<json_string>(new json_string(contents.top())));
+    values.push(jstring_pool.allocate(contents.top()));
     contents.pop();
     break;
 
   case 13:
-    values.push(std::shared_ptr<json_numeric>(new json_numeric(contents.top())));
+    values.push(new json_numeric(contents.top()));
     contents.pop();
     break;
 
@@ -584,17 +584,17 @@ void jsonhead::json_parser::reduce(int code)
   //case 15:
 
   case 16:
-    values.push(std::shared_ptr<json_state>(new json_state(jsonhead::json_token::v_true)));
+    values.push(new json_state(jsonhead::json_token::v_true));
     contents.pop();
     break;
 
   case 17:
-    values.push(std::shared_ptr<json_state>(new json_state(jsonhead::json_token::v_false)));
+    values.push(new json_state(jsonhead::json_token::v_false));
     contents.pop();
     break;
 
   case 18:
-    values.push(std::shared_ptr<json_state>(new json_state(jsonhead::json_token::v_null)));
+    values.push(new json_state(jsonhead::json_token::v_null));
     contents.pop();
     break;
   }
