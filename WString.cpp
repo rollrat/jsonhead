@@ -49,7 +49,7 @@ static const char *findzero(const char *str)
 /* this function provide counting string-length method by null-terminated string 
    but is too big, to use this function should be considered prior using.
    or you can make partition routines. */
-size_t StringTools::strlen(const char *str)
+size_t WStringTools::strlen(const char *str)
 {
   if (sizeof(char) != 1)
     // Call built-in function.
@@ -144,7 +144,7 @@ static const wchar_t *wfindzero(const wchar_t *str)
   }
 }
 
-size_t StringTools::wcslen(const wchar_t * str)
+size_t WStringTools::wcslen(const wchar_t * str)
 {
 #if !defined(_COMPILER_MS)
   return ::wcslen(str);
@@ -192,7 +192,7 @@ size_t StringTools::wcslen(const wchar_t * str)
 #endif
 }
 
-wchar_t *StringTools::wcsrnchr(wchar_t * ptr, size_t len, wchar_t ch)
+wchar_t *WStringTools::wcsrnchr(wchar_t * ptr, size_t len, wchar_t ch)
 {
   static_assert(sizeof(wchar_t) == 2 || sizeof(wchar_t) == 4, 
     "The 'wcsrnchr' function is not supported on your environment.");
@@ -251,7 +251,7 @@ wchar_t *StringTools::wcsrnchr(wchar_t * ptr, size_t len, wchar_t ch)
   return nullptr;
 }
 
-wchar_t *StringTools::wcsrnstrn(wchar_t * ptr, size_t ptrlen, 
+wchar_t *WStringTools::wcsrnstrn(wchar_t * ptr, size_t ptrlen, 
   const wchar_t * dest, size_t destlen)
 {
   wchar_t *tptr;
@@ -267,7 +267,7 @@ wchar_t *StringTools::wcsrnstrn(wchar_t * ptr, size_t ptrlen,
   return NULL;
 }
 
-void StringTools::wcsnset(wchar_t * ptr, wchar_t ch, size_t len)
+void WStringTools::wcsnset(wchar_t * ptr, wchar_t ch, size_t len)
 {
   if (sizeof(wchar_t) != 2) {
     //::_wcsnset(ptr, ch, len);
@@ -303,7 +303,7 @@ void StringTools::wcsnset(wchar_t * ptr, wchar_t ch, size_t len)
   }
 }
 
-size_t StringTools::wcountch(wchar_t * ptr, wchar_t * last, wchar_t ch)
+size_t WStringTools::wcountch(wchar_t * ptr, wchar_t * last, wchar_t ch)
 {
 #ifdef _COMPILER_MS
   static_assert(sizeof(wchar_t) == 2, "Do not use 'wcountch' function!");
@@ -375,7 +375,7 @@ WString::WString(wchar_t ch, size_t count)
 {
   first = alloc(length + 1);
   last = first + length - 1;
-  StringTools::wcsnset(first, ch, count);
+  WStringTools::wcsnset(first, ch, count);
   first[length] = 0; 
 }
 
@@ -391,14 +391,14 @@ WString::WString(wchar_t ch)
 WString::WString(int num)
 {
   wchar_t buffer[65];
-  swprintf(buffer, 65, L"%lld", num);
+  swprintf(buffer, 65, L"%d", num);
   InitString((const wchar_t *)buffer);
 }
 
 WString::WString(long int num)
 {
   wchar_t buffer[65];
-  swprintf(buffer, 65, L"%lld", num);
+  swprintf(buffer, 65, L"%ld", num);
   InitString((const wchar_t *)buffer);
 }
 
@@ -702,7 +702,7 @@ WString WString::PadLeft(size_t len, wchar_t pad)
     wchar_t* ret = new wchar_t[len + 1];
     size_t   padlen = len - length;
 
-    StringTools::wcsnset(ret, pad, padlen);
+    WStringTools::wcsnset(ret, pad, padlen);
     memcpy(ret + padlen, first, length * sizeof(wchar_t));
 
     ret[len] = 0;
@@ -722,7 +722,7 @@ WString WString::PadRight(size_t len, wchar_t pad)
     wchar_t *ret = new wchar_t[len + 1];
 
     memcpy(ret, first, length * sizeof(wchar_t));
-    StringTools::wcsnset(ret + length, pad, len - length);
+    WStringTools::wcsnset(ret + length, pad, len - length);
 
     ret[len] = 0;
 
@@ -744,9 +744,9 @@ WString WString::PadCenter(size_t len, wchar_t pad, bool lefts)
 
     wchar_t *ret = new wchar_t[len + 1];
 
-    StringTools::wcsnset(ret, pad, lpadlen);
+    WStringTools::wcsnset(ret, pad, lpadlen);
     memcpy(ret + lpadlen, first, length * sizeof(wchar_t));
-    StringTools::wcsnset(ret + lpadlen + length, pad, rpadlen);
+    WStringTools::wcsnset(ret + lpadlen + length, pad, rpadlen);
 
     ret[len] = 0;
 
@@ -1092,7 +1092,7 @@ size_t WString::FindFirstHelper(const wchar_t *str, size_t starts) const
 size_t WString::FindLastHelper(const wchar_t *str, size_t ends, size_t len) const
 {
   if (ends >= length)return error;
-  const wchar_t *ptr = StringTools::wcsrnstrn(first, length - ends, str, len);
+  const wchar_t *ptr = WStringTools::wcsrnstrn(first, length - ends, str, len);
   return ptr != NULL ? ptr - first : error;
 }
 
@@ -1104,7 +1104,7 @@ size_t WString::FindFirst(const wchar_t ch, size_t starts) const
 
 size_t WString::FindLast(const wchar_t ch, size_t ends) const
 {
-  const wchar_t *ptr = StringTools::wcsrnchr(first, length - ends, ch);
+  const wchar_t *ptr = WStringTools::wcsrnchr(first, length - ends, ch);
   return (ptr != NULL) ? ptr - first : error;
 }
 
@@ -1278,7 +1278,7 @@ WString::ArrayType WString::SplitReverseHelper(const wchar_t *src,
   size_t         nowlen = length;
   wchar_t *ptr = first, *tptr, *prev = last + 1;
 
-  for (; (tptr = StringTools::wcsrnstrn(first, nowlen, src, srclen))
+  for (; (tptr = WStringTools::wcsrnstrn(first, nowlen, src, srclen))
     && max; max--, count++)
   {
     position[count] = tptr + srclen;
@@ -1735,7 +1735,7 @@ WString::ArrayType WString::LineSplitHelper(size_t len, const wchar_t *front,
   {
     if (end_len)
     {
-      StringTools::wcsnset(n[countLineLen - 1]->first + front_len + 
+      WStringTools::wcsnset(n[countLineLen - 1]->first + front_len + 
         remainLen, L' ', len - remainLen);
     }
     else
@@ -1882,12 +1882,22 @@ long double WString::ToLongDoubleHelper(const wchar_t *ptr) const
 
 void WString::AnsiToUnicode(const char *str, size_t len)
 {
+#if !CONFIG_DISABLE_UTF8
+  /*std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
+  std::wstring wide = converter.from_bytes(str).c_str();
+  first = wide.c_str();*/
+  first = new wchar_t[len + 1];
+  mbstowcs(first, str, SIZE_MAX);
+  length = WStringTools::wcslen(first);
+  last = first + length - 1;
+#else
    wchar_t *ptr = first = new wchar_t[len + 1];
    size_t rlen = len;
    length = len;
    while (rlen--) *ptr++ = (wchar_t)*str++;
    *ptr = 0;
    last = first + length - 1;
+#endif
 }
 
 char *WString::UnicodeToAnsi()
@@ -1904,14 +1914,16 @@ char *WString::UnicodeToAnsi()
 
 void WString::InitString(const char *str)
 {
-  //length = StringTools::strlen(str);
-  first = new wchar_t[length + 1];
+  auto len = WStringTools::strlen(str);
+  first = new wchar_t[len + 1];
   mbstowcs(first, str, SIZE_MAX);
+  length = WStringTools::wcslen(first);
+  last = first + length - 1;
 }
 
 void WString::InitString(const wchar_t *str)
 {
-  length = StringTools::wcslen(str);
+  length = WStringTools::wcslen(str);
   first = new wchar_t[length + 1];
   last = first + length - 1;
   memcpy(first, str, (length + 1) * sizeof(wchar_t));

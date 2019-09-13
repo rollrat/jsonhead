@@ -43,6 +43,8 @@ typedef uint32_t	ptr_type;
 #include <memory>
 #include <string>
 #include <iostream>
+#include <locale>
+#include <codecvt>
 
 namespace jsonhead
 {

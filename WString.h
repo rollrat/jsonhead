@@ -16,184 +16,15 @@
 
 #include <stdint.h>
 #include <cstring>
-
-// Get a pointer type can be sure.
-#if defined(__x86_64__) || defined(__ia64__) || defined(_M_AMD64) \
-  || defined(_M_IA64) || defined(_WIN64) || defined(__alpha__) \
-  || defined(__s390__)
-#define _X64_MODE
-typedef uint64_t	ptr_type;
-#else
-typedef uint32_t	ptr_type;
-#endif
-
-#ifdef _MSC_VER
-#define _COMPILER_MS
-#elif __clang__
-#define _COMPILER_LLVM
-#elif __GNUC__
-#define _COMPILER_GCC
-#elif defined(__MINGW32__) || defined(__MINGW64__)
-#define _COMPILER_MINGW
-#endif
-
-#if defined(_WIN32) || defined(_WIN64)
-#define _OS_WINDOWS
-#elif __linux__
-#define _OS_LINUX
-#endif
-
 #include <memory>
 #include <string>
 #include <iostream>
+#include "String.h"
 
 namespace jsonhead
 {
 
-template<typename type>
-class ArrayBase
-{
-public:
-
-  ArrayBase()
-    : m_size(0)
-    , m_pointer(nullptr)
-    , m_constptr(nullptr)
-  {
-  }
-
-  ArrayBase(size_t size, type *pointer)
-    : m_size(size)
-    , m_pointer(pointer)
-    , m_constptr(pointer)
-  {
-  }
-
-  virtual ~ArrayBase()
-  {
-    if (!m_nodel)
-    {
-      _class_delete(*m_constptr, m_constptr);
-      delete[] m_constptr;
-      m_constptr = nullptr;
-    }
-  }
-
-  template<typename tt> 
-  void _class_delete(tt&, tt*&)
-  {
-  }
-  template<typename tt>
-  void _class_delete(tt*&, tt* const*& arr)
-  {
-    for (size_t i = 0; i < m_size; i++)
-    {
-      arr[i].~type();
-      delete arr[i];
-    }
-  }
-
-protected:
-
-  bool   m_nodel = false;
-  size_t m_size;
-  type  *m_pointer;
-  type  *m_constptr;
-
-};
-
-// Read Only Array [ const array iterator ]
-template<typename type>
-class ReadOnlyArray
-  : public ArrayBase<type>
-{
-  typedef ReadOnlyArray<type> this_type;
-
-public:
-  ReadOnlyArray(type *ptr, size_t size) : ArrayBase<type>(size, ptr) { }
-  ReadOnlyArray() : ArrayBase<type>() { }
-  ~ReadOnlyArray() { }
-
-  type operator*() const { return *this->m_pointer; }
-  type* operator->() const { return **this; }
-  type operator[](size_t off) const { return *(*this + off); }
-  this_type& operator--() { --this->m_pointer; return *this; }
-
-  this_type operator--(int)
-  {
-    this_type tmp = *this;
-    tmp.m_nodel = true;
-    --this->m_pointer;
-    return tmp;
-  }
-
-  this_type& operator++()
-  {
-    ++this->m_pointer;
-    return *this;
-  }
-
-  this_type operator++(int)
-  {
-    this_type tmp = *this;
-    tmp.m_nodel = true;
-    ++*this->m_pointer;
-    return tmp;
-  }
-
-  this_type& operator+=(size_t size)
-  {
-    this->m_pointer += size;
-    return *this;
-  }
-
-  this_type operator+(size_t size) const
-  {
-    this_type tmp = *this;
-    tmp.m_nodel = true;
-    return (tmp += size);
-  }
-
-  this_type& operator-=(size_t size)
-  {
-    this->m_pointer -= size;
-    return *this;
-  }
-
-  this_type operator-(size_t size) const
-  {
-    this_type tmp = *this;
-    tmp.m_nodel = true;
-    return (tmp -= size);
-  }
-
-  bool operator==(const this_type& refer) const
-  { return (this->m_pointer == refer.m_pointer); }
-  bool operator!=(const this_type& refer) const
-  { return (!(*this == refer)); }
-  bool operator<(const this_type& refer) const
-  { return (this->m_pointer < refer.m_pointer); }
-  bool operator>(const this_type& refer) const
-  { return (refer < *this); }
-  bool operator<=(const this_type& refer) const
-  { return (!(refer < *this)); }
-  bool operator>=(const this_type& refer) const
-  { return (!(*this < refer)); }
-  void Reset() { this->m_pointer = this->m_constptr; }
-  type* Array() const { return this->m_constptr; }
-  size_t Size() const { return this->m_size; }
-
-  // For Each <Item> In Type _ etc...
-  template<typename func>
-  void Each(func function)
-  {
-    for (size_t i = 0; i < this->m_size; i++)
-      function(this->m_constptr[i]);
-  }
-
-};
-
-class StringTools
+class WStringTools
 {
 public:
   static size_t strlen(const char *str);
@@ -221,7 +52,7 @@ public:
   static const size_t error = -1;
 
   WString() : length(0), first(nullptr), last(first) { }
-  WString(const char *str) { AnsiToUnicode(str, StringTools::strlen(str)); }
+  WString(const char *str) { AnsiToUnicode(str, WStringTools::strlen(str)); }
   WString(const char *str, size_t len) { AnsiToUnicode(str, len); }
   WString(const wchar_t *str) { InitString(str); }
   explicit WString(wchar_t *str, size_t len, bool built_in = true);
@@ -238,6 +69,7 @@ public:
   WString(unsigned long long int);
   WString(float);
   WString(double);
+  WString(const String& cnt) : WString((const char *)cnt.Reference(), cnt.Length()) { }
   WString(WString&& ws) : first(ws.first), last(ws.last), 
     length(ws.length) { ws.tm = true; }
   WString(const WString& cnt) : WString((const wchar_t *)cnt.first, cnt.length) {}
@@ -418,7 +250,7 @@ public:
   /// This function is the same implementation as string::append.
   /// To fastly append, use WStringBuilder.
   WString Append(const wchar_t *str)
-  { return AppendHelper(str, StringTools::wcslen(str)); }
+  { return AppendHelper(str, WStringTools::wcslen(str)); }
   WString Append(const WString& refer)
   { return AppendHelper(refer.first, refer.length); }
   
@@ -427,51 +259,51 @@ public:
   size_t FindFirst(const WString& refer, size_t starts = 0) const
   { return FindFirstHelper(refer.first, starts); }
   size_t FindLast(const wchar_t *str, size_t ends = 0) const
-  { return FindLastHelper(str, ends, StringTools::wcslen(str)); }
+  { return FindLastHelper(str, ends, WStringTools::wcslen(str)); }
   size_t FindLast(const WString& refer, size_t ends = 0) const
   { return FindLastHelper(refer.first, ends, refer.length); }
   size_t FindFirst(const wchar_t ch, size_t starts = 0) const;
   size_t FindLast(const wchar_t ch, size_t ends = 0) const;
 
   bool Contains(const wchar_t *str, bool ignore = false) const
-  { return ContainsHelper(str, StringTools::wcslen(str), ignore); }
+  { return ContainsHelper(str, WStringTools::wcslen(str), ignore); }
   bool Contains(const WString& refer, bool ignore = false) const
   { return ContainsHelper(refer.first, refer.length, ignore); }
 
   size_t Count(const wchar_t *str) const
-  { return CountHelper(str, StringTools::wcslen(str)); }
+  { return CountHelper(str, WStringTools::wcslen(str)); }
   size_t Count(const WString& refer) const
   { return CountHelper(refer.first, refer.length); }
   size_t Count(const wchar_t ch) const
-  { return StringTools::wcountch(first, last, ch); }
+  { return WStringTools::wcountch(first, last, ch); }
 
   ArrayType Split(const wchar_t *str, size_t max = SIZE_MAX)
-  { return SplitHelper(str, StringTools::wcslen(str), max); }
+  { return SplitHelper(str, WStringTools::wcslen(str), max); }
   ArrayType Split(const WString &refer, size_t max = SIZE_MAX)
   { return SplitHelper(refer.first, refer.length, max); }
   ArrayType SplitSlow(const wchar_t *str, size_t max = SIZE_MAX)
-  { return SplitSlowHelper(str, StringTools::wcslen(str), max); }
+  { return SplitSlowHelper(str, WStringTools::wcslen(str), max); }
   ArrayType SplitSlow(const WString &refer, size_t max = SIZE_MAX)
   { return SplitSlowHelper(refer.first, refer.length, max); }
   WString SplitPosition(const wchar_t *str, size_t pos)
-  { return SplitPositionHelper(str, StringTools::wcslen(str), pos); }
+  { return SplitPositionHelper(str, WStringTools::wcslen(str), pos); }
   WString SplitPosition(const WString& refer, size_t pos)
   { return SplitPositionHelper(refer.first, refer.length, pos); }
   ArrayType SplitReverse(const wchar_t *str, size_t max = SIZE_MAX)
-  { return SplitReverseHelper(str, StringTools::wcslen(str), max); }
+  { return SplitReverseHelper(str, WStringTools::wcslen(str), max); }
   ArrayType SplitReverse(const WString &refer, size_t max = SIZE_MAX)
   { return SplitReverseHelper(refer.first, refer.length, max); }
   
   WString Between(const wchar_t *left, const wchar_t *right, size_t starts = 0)
-  { return BetweenHelper(left, StringTools::wcslen(left), right, 
-    StringTools::wcslen(right), starts); }
+  { return BetweenHelper(left, WStringTools::wcslen(left), right, 
+    WStringTools::wcslen(right), starts); }
   WString Between(const WString& left, const WString& right, size_t starts = 0)
   { return BetweenHelper(left.first, left.length, 
     right.first, right.length, starts); }
   ArrayType Betweens(const wchar_t *left, const wchar_t *right, 
     size_t starts = 0)
-  { return BetweensHelper(left, StringTools::wcslen(left), right, 
-    StringTools::wcslen(right), starts); }
+  { return BetweensHelper(left, WStringTools::wcslen(left), right, 
+    WStringTools::wcslen(right), starts); }
   ArrayType Betweens(const WString& left, const WString& right, 
     size_t starts = 0)
   { return BetweensHelper(left.first, left.length, 
@@ -480,7 +312,7 @@ public:
   ArrayType Betweens(wchar_t left, wchar_t right, size_t starts = 0);
   
   bool StartsWith(const wchar_t *str, size_t starts = 0) const
-  { return StartsWithHelper(str, starts, StringTools::wcslen(str)); }
+  { return StartsWithHelper(str, starts, WStringTools::wcslen(str)); }
   bool StartsWith(const WString& refer, size_t starts = 0) const
   { return StartsWithHelper(refer.first, starts, refer.length); }
   bool StartsWith(const wchar_t ch, size_t starts) const
@@ -488,7 +320,7 @@ public:
   inline bool StartsWith(const wchar_t ch) const
   { return *first == ch; }
   bool EndsWith(const wchar_t *str, size_t ends = 0) const
-  { return EndsWithHelper(str, ends, StringTools::wcslen(str)); }
+  { return EndsWithHelper(str, ends, WStringTools::wcslen(str)); }
   bool EndsWith(const WString& refer, size_t ends = 0) const
   { return EndsWithHelper(refer.first, ends, refer.length); }
   bool EndsWith(const wchar_t ch, size_t ends) const
@@ -497,11 +329,11 @@ public:
   { return *last == ch; }
 
   WString InsertLeft(size_t separation, const wchar_t *str)
-  { return InsertLeftHelper(separation, str, StringTools::wcslen(str)); }
+  { return InsertLeftHelper(separation, str, WStringTools::wcslen(str)); }
   WString InsertLeft(size_t separation, const WString& refer)
   { return InsertLeftHelper(separation, refer.first, refer.length); }
   WString InsertRight(size_t separation, const wchar_t *str)
-  { return InsertRightHelper(separation, str, StringTools::wcslen(str)); }
+  { return InsertRightHelper(separation, str, WStringTools::wcslen(str)); }
   WString InsertRight(size_t separation, const WString& refer)
   { return InsertRightHelper(separation, refer.first, refer.length); }
   WString InsertLeft(size_t separation, wchar_t ch);
@@ -510,7 +342,7 @@ public:
   WString Replace(const wchar_t *src, const wchar_t *dest, 
     size_t max = SIZE_MAX)
   { return ReplaceHelper(src, dest, 
-    StringTools::wcslen(src), StringTools::wcslen(dest), max); }
+    WStringTools::wcslen(src), WStringTools::wcslen(dest), max); }
   WString Replace(const WString& refer0, const WString& refer1, 
     size_t max = SIZE_MAX)
   { return ReplaceHelper(refer0.first, refer1.first, refer0.length, 
@@ -518,7 +350,7 @@ public:
   WString ReplaceSlow(const wchar_t *src, const wchar_t *dest, 
     size_t max = SIZE_MAX)
   { return ReplaceSlowHelper(src, dest, 
-    StringTools::wcslen(src), StringTools::wcslen(dest), max); }
+    WStringTools::wcslen(src), WStringTools::wcslen(dest), max); }
   WString ReplaceSlow(const WString& refer0, const WString& refer1, 
     size_t max = SIZE_MAX)
   { return ReplaceSlowHelper(refer0.first, refer1.first, refer0.length, 
@@ -534,7 +366,7 @@ public:
   WString Insert(size_t starts, const WString& refer, size_t len)
   { return Insert(starts, refer.first, len); }
   WString Insert(size_t starts, const wchar_t *str)
-  { return Insert(starts, str, StringTools::wcslen(str)); }
+  { return Insert(starts, str, WStringTools::wcslen(str)); }
   WString Insert(size_t starts, const WString& refer)
   { return Insert(starts, refer.first, refer.length); }
 
@@ -543,14 +375,14 @@ public:
   ArrayType LineSplit(size_t len, const WString& front)
   { return LineSplitHelper(len, front.Reference(), front.length, nullptr, 0); }
   ArrayType LineSplit(size_t len, const wchar_t *front)
-  { return LineSplitHelper(len, front, StringTools::wcslen(front), 
+  { return LineSplitHelper(len, front, WStringTools::wcslen(front), 
     nullptr, 0); }
   ArrayType LineSplit(size_t len, const WString& front, const WString& end)
   { return LineSplitHelper(len, front.Reference(), front.length, 
     end.Reference(), end.length); }
   ArrayType LineSplit(size_t len, const wchar_t *front, const wchar_t *end)
-  { return LineSplitHelper(len, front, StringTools::wcslen(front), 
-    end, StringTools::wcslen(end)); }
+  { return LineSplitHelper(len, front, WStringTools::wcslen(front), 
+    end, WStringTools::wcslen(end)); }
   ArrayType LineSplit(bool last = false);
   WString LineBreak(size_t len);
 

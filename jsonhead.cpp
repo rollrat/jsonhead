@@ -416,7 +416,12 @@ static jsonhead::json_token symbol_index[] =
 #define ACCEPT_INDEX 28
 
 jsonhead::json_parser::json_parser(std::string file_path, size_t pool_capacity)
-  : lex(file_path), jarray_pool(pool_capacity), jobject_pool(pool_capacity), jstring_pool(pool_capacity) {
+  : lex(file_path)
+#ifdef CONFIG_ALLOCATOR
+  , jarray_pool(pool_capacity), jobject_pool(pool_capacity), jstring_pool(pool_capacity),
+    jnumeric_pool(pool_capacity), jstate_pool(pool_capacity)
+#endif
+{
 }
 
 bool jsonhead::json_parser::step() {
@@ -459,8 +464,7 @@ bool jsonhead::json_parser::step() {
   return true;
 }
 
-void jsonhead::json_parser::reduce(int code)
-{
+void jsonhead::json_parser::reduce(int code) {
   int reduce_production = -code;
 
   // Reduce Stack
@@ -499,7 +503,11 @@ void jsonhead::json_parser::reduce(int code)
   case 3:
     contents.pop();
     contents.pop();
+#ifndef CONFIG_ALLOCATOR
+    values.push(jarray(new json_array));
+#else
     values.push(jarray(jarray_pool.allocate()));
+#endif
     break;
 
   case 4:
@@ -510,7 +518,11 @@ void jsonhead::json_parser::reduce(int code)
   case 5:
     contents.pop();
     contents.pop();
+#ifndef CONFIG_ALLOCATOR
+    values.push(jobject(new json_object()));
+#else
     values.push(jobject(jobject_pool.allocate()));
+#endif
     break;
 
   case 6:
@@ -520,11 +532,20 @@ void jsonhead::json_parser::reduce(int code)
 
   case 7:
     {
+#ifndef CONFIG_ALLOCATOR
+      auto jo = jobject(new json_object());
+#else
       auto jo = jobject(jobject_pool.allocate());
+#endif
       if (!(_skip_literal && values.top()->is_string()))
         jo->keyvalue[contents.top()] = std::move(values.top());
+#ifndef CONFIG_ALLOCATOR
+      else
+        jo->keyvalue[contents.top()] = std::shared_ptr<json_string>(new json_string(std::move(String())));
+#else
       else
         jo->keyvalue[contents.top()] = jstring_pool.allocate(std::move(String()));
+#endif
       values.pop();
       values.push(jo);
       contents.pop();
@@ -537,8 +558,13 @@ void jsonhead::json_parser::reduce(int code)
       auto jo = values.top(); values.pop();
       if (!(_skip_literal && values.top()->is_string()))
         ((json_object*)&*jo)->keyvalue[contents.top()] = std::move(values.top());
+#ifndef CONFIG_ALLOCATOR
+      else
+        ((json_object*)&*jo)->keyvalue[contents.top()] = std::shared_ptr<json_string>(new json_string(std::move(String())));
+#else
       else
         ((json_object*)&*jo)->keyvalue[contents.top()] = jstring_pool.allocate(std::move(String()));
+#endif
       values.pop();
       values.push(jo);
       contents.pop();
@@ -551,7 +577,11 @@ void jsonhead::json_parser::reduce(int code)
 
   case 10:
     {
+#ifndef CONFIG_ALLOCATOR
+      auto ja = jarray(new json_array());
+#else
       auto ja = jarray(jarray_pool.allocate());
+#endif
       if (!(_skip_literal && values.top()->is_string()))
         ja->array.push_back(values.top());
       values.pop();
@@ -571,12 +601,20 @@ void jsonhead::json_parser::reduce(int code)
     break;
 
   case 12:
+#ifndef CONFIG_ALLOCATOR
+    values.push(std::shared_ptr<json_string>(new json_string(contents.top())));
+#else
     values.push(jstring_pool.allocate(contents.top()));
+#endif
     contents.pop();
     break;
 
   case 13:
-    values.push(new json_numeric(contents.top()));
+#ifndef CONFIG_ALLOCATOR
+    values.push(std::shared_ptr<json_numeric>(new json_numeric(contents.top())));
+#else
+    values.push(jnumeric_pool.allocate(contents.top()));
+#endif
     contents.pop();
     break;
 
@@ -584,17 +622,29 @@ void jsonhead::json_parser::reduce(int code)
   //case 15:
 
   case 16:
-    values.push(new json_state(jsonhead::json_token::v_true));
+#ifndef CONFIG_ALLOCATOR
+    values.push(std::shared_ptr<json_state>(new json_state(jsonhead::json_token::v_true)));
+#else
+    values.push(jstate_pool.allocate(jsonhead::json_token::v_true));
+#endif
     contents.pop();
     break;
 
   case 17:
-    values.push(new json_state(jsonhead::json_token::v_false));
+#ifndef CONFIG_ALLOCATOR
+    values.push(std::shared_ptr<json_state>(new json_state(jsonhead::json_token::v_false)));
+#else
+    values.push(jstate_pool.allocate(jsonhead::json_token::v_false));
+#endif
     contents.pop();
     break;
 
   case 18:
-    values.push(new json_state(jsonhead::json_token::v_null));
+#ifndef CONFIG_ALLOCATOR
+    values.push(std::shared_ptr<json_state>(new json_state(jsonhead::json_token::v_null)));
+#else
+    values.push(jstate_pool.allocate(jsonhead::json_token::v_null));
+#endif
     contents.pop();
     break;
   }

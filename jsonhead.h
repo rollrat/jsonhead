@@ -49,6 +49,7 @@ typedef enum class _json_token {
   error,
 } json_token;
 
+#ifdef CONFIG_ALLOCATOR
 template<typename type>
 class json_allocator {
   size_t capacity;
@@ -59,7 +60,7 @@ class json_allocator {
   class allocator_node {
   public:
     typename value_size value;
-    pointer rep() { return reinterpret_cast<pointer>(value); }
+    constexpr pointer rep() { return reinterpret_cast<pointer>(value); }
   };
 
   std::vector<std::unique_ptr<allocator_node[]>> alloc;
@@ -70,6 +71,14 @@ public:
   json_allocator(size_t capacity) : capacity(capacity), count(0) {
     alloc.push_back(std::unique_ptr<allocator_node[]>(std::move(new allocator_node[capacity])));
     count = 0;
+  }
+
+  ~json_allocator() {
+    for (int i = 0; i < alloc.size() - 1; i++)
+      for (int j = 0; j < capacity; j++)
+        alloc[i][j].rep()->type::~type();
+    for (int j = 0; j < count; j++)
+        alloc.back()[j].rep()->type::~type();
   }
 
   template <typename... Args>
@@ -83,6 +92,7 @@ public:
     return ptr;
   }
 };
+#endif
 
 class json_lexer {
   json_token curtok;
@@ -139,7 +149,11 @@ public:
   virtual std::ostream& print(std::ostream& os, bool format = false, std::string indent = "") const = 0;
 };
 
+#ifndef CONFIG_ALLOCATOR
+using jvalue = std::shared_ptr<json_value>;
+#else
 using jvalue = json_value*;
+#endif
 
 class json_object : public json_value {
 public:
@@ -153,12 +167,17 @@ class json_array : public json_value {
 public:
   json_array() : json_value(1) {}
   std::vector<jvalue> array;
-
+  
   virtual std::ostream& print(std::ostream& os, bool format = false, std::string indent = "") const;
 };
 
+#ifndef CONFIG_ALLOCATOR
+using jobject = std::shared_ptr<json_object>;
+using jarray = std::shared_ptr<json_array>;
+#else
 using jobject = json_object*;
 using jarray = json_array*;
+#endif
 
 class json_numeric : public json_value {
 public:
@@ -190,9 +209,14 @@ class json_parser {
   bool _skip_literal = false;
   bool _error = false;
   bool _reduce = false;
+  
+#ifdef CONFIG_ALLOCATOR
   json_allocator<json_array> jarray_pool;
   json_allocator<json_object> jobject_pool;
   json_allocator<json_string> jstring_pool;
+  json_allocator<json_numeric> jnumeric_pool;
+  json_allocator<json_state> jstate_pool;
+#endif
 
 public:
   json_parser(std::string file_path, size_t pool_capacity = 1024 * 256);
