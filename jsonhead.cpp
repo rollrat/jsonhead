@@ -10,6 +10,7 @@
 
 #include "jsonhead.h"
 #include <sstream>
+#include <set>
 
 ///===-----------------------------------------------------------------------===
 ///
@@ -49,6 +50,7 @@ bool jsonhead::json_lexer::next() {
     case ' ':
     case '\r':
     case '\n':
+    case '\t':
       continue;
 
     case ',':
@@ -264,7 +266,7 @@ std::ostream& jsonhead::json_object::print(std::ostream& os, bool format, std::s
     os << '{';
   else
     os << "{\n";
-  for (auto it = keyvalue.begin(); it != keyvalue.end(); ++it) {
+  for (auto it = keyvalue.rbegin(); it != keyvalue.rend(); ++it) {
     if (!format) {
       os << '\"' << it->first << "\":";
       it->second->print(os);
@@ -273,7 +275,7 @@ std::ostream& jsonhead::json_object::print(std::ostream& os, bool format, std::s
       os << indent << "  \"" << it->first << "\": ";
       it->second->print(os, true, indent + "  ");
     }
-    if (std::next(it) != keyvalue.end()) {
+    if (std::next(it) != keyvalue.rend()) {
       if (!format)
         os << ',';
       else
@@ -288,29 +290,33 @@ std::ostream& jsonhead::json_object::print(std::ostream& os, bool format, std::s
 }
 
 std::ostream& jsonhead::json_array::print(std::ostream& os, bool format, std::string indent) const {
-  if (!format)
-    os << '[';
-  else
-    os << "[\n";
-  for (auto it = array.rbegin(); it != array.rend(); ++it) {
+  if (array.size() > 0) {
     if (!format)
-      (*it)->print(os);
-    else {
-      os << indent << "  ";
-      (*it)->print(os, true, indent + "  ");
-    }
-    if (std::next(it) != array.rend()) {
+      os << '[';
+    else
+      os << "[\n";
+    for (auto it = array.rbegin(); it != array.rend(); ++it) {
       if (!format)
-        os << ',';
-      else
-        os << ",\n";
+        (*it)->print(os);
+      else {
+        os << indent << "  ";
+        (*it)->print(os, true, indent + "  ");
+      }
+      if (std::next(it) != array.rend()) {
+        if (!format)
+          os << ',';
+        else
+          os << ",\n";
+      }
     }
+    if (!format)
+      os << ']';
+    else
+      os << '\n' << indent << "]";
   }
-
-  if (!format)
-    os << ']';
-  else
-    os << '\n' << indent << "]";
+  else {
+    os << "[]";
+  }
   return os;
 }
 
@@ -538,13 +544,26 @@ void jsonhead::json_parser::reduce(int code) {
       auto jo = jobject(jobject_pool.allocate());
 #endif
       if (!(_skip_literal && values.top()->is_string()))
+#ifndef CONFIG_STABLE
         jo->keyvalue[contents.top()] = std::move(values.top());
+#else
+        jo->keyvalue.push_back({contents.top(), std::move(values.top())});
+#endif
 #ifndef CONFIG_ALLOCATOR
       else
+        
+#ifndef CONFIG_STABLE
         jo->keyvalue[contents.top()] = std::shared_ptr<json_string>(new json_string(std::move(String())));
 #else
+        jo->keyvalue.push_back({contents.top(), std::shared_ptr<json_string>(new json_string(std::move(String())))});
+#endif
+#else
       else
+#ifndef CONFIG_STABLE
         jo->keyvalue[contents.top()] = jstring_pool.allocate(std::move(String()));
+#else
+        jo->keyvalue.push_back({contents.top(), jstring_pool.allocate(std::move(String()))});
+#endif
 #endif
       values.pop();
       values.push(jo);
@@ -557,13 +576,25 @@ void jsonhead::json_parser::reduce(int code) {
       contents.pop();
       auto jo = values.top(); values.pop();
       if (!(_skip_literal && values.top()->is_string()))
+#ifndef CONFIG_STABLE
         ((json_object*)&*jo)->keyvalue[contents.top()] = std::move(values.top());
+#else
+        ((json_object*)&*jo)->keyvalue.push_back({contents.top(), std::move(values.top())});
+#endif
 #ifndef CONFIG_ALLOCATOR
       else
+#ifndef CONFIG_STABLE
         ((json_object*)&*jo)->keyvalue[contents.top()] = std::shared_ptr<json_string>(new json_string(std::move(String())));
 #else
+        ((json_object*)&*jo)->keyvalue.push_back({contents.top(), std::shared_ptr<json_string>(new json_string(std::move(String())))});
+#endif
+#else
       else
+#ifndef CONFIG_STABLE
         ((json_object*)&*jo)->keyvalue[contents.top()] = jstring_pool.allocate(std::move(String()));
+#else
+        ((json_object*)&*jo)->keyvalue.push_back({contents.top(), jstring_pool.allocate(std::move(String()))});
+#endif
 #endif
       values.pop();
       values.push(jo);
@@ -648,4 +679,230 @@ void jsonhead::json_parser::reduce(int code) {
     contents.pop();
     break;
   }
+}
+
+///===-----------------------------------------------------------------------===
+///
+///               Json Tree
+///
+///===-----------------------------------------------------------------------===
+
+std::ostream& jsonhead::json_tree_node::print(std::ostream& os, std::string indent) const {
+  if (this->type == json_tree_type::boolean)
+    os << "boolean";
+  else if (this->type == json_tree_type::string)
+    os << "string";
+  else if (this->type == json_tree_type::numeric)
+    os << "numeric";
+  else if (this->type == json_tree_type::none)
+    os << "null";
+  return os;
+}
+
+jsonhead::json_tree_array::json_tree_array()
+  : json_tree_node(json_tree_type::array) {
+}
+
+bool jsonhead::json_tree_array::operator==(const json_tree_node& node) {
+  if (type != node.type)
+    return false;
+  auto jta = (json_tree_array *)(&node);
+  if (array.size() != jta->array.size())
+    return false;
+  for (int i = 0; i < array.size(); i++)
+    if (*array[i] != *jta->array[i])
+      return false;
+  return true;
+}
+
+bool jsonhead::json_tree_array::check_consistency() {
+  if (array.size() == 0)
+    return true;
+  auto f = array[0];
+  for (auto it = array.begin() + 1; it != array.end(); it++)
+    if (*f != **it)
+      return false;
+  return true;
+}
+
+static bool check_safe_array(jsonhead::jtree_value dest, jsonhead::jtree_value src) {
+  auto t1 = (jsonhead::json_tree_safe_array*)(&*dest);
+  auto t2 = (jsonhead::json_tree_safe_array*)(&*src);
+
+  if (t1->element_size == 0 || t1->element_type->type == jsonhead::json_tree_type::none)
+    return true;
+  if (t1->element_type->type == jsonhead::json_tree_type::safe_array)
+    return check_safe_array(t1->element_type, t2->element_type);
+  return false;
+}
+
+jsonhead::jtree_safe_array jsonhead::json_tree_array::to_safe_array() {
+  if (array.size() == 0) {
+    return jtree_safe_array(new json_tree_safe_array(jtree_value(new json_tree_node(json_tree_type::none)), array.size()));
+  }
+#ifndef CONFIG_STRICT
+  if (array[0]->type == json_tree_type::object) {
+    json_tree_object* obj = new json_tree_object();
+    std::map<String, int> keypair;
+
+    for (auto& it : array) {
+      auto tob = ((json_tree_object*)(&*it));
+      for (auto& kp : tob->keyvalue)
+        if (keypair.find(kp.first) == keypair.end()) {
+          obj->keyvalue.push_back({kp.first, kp.second});
+          keypair[kp.first] = keypair.size();
+        }
+        else if (obj->keyvalue[keypair[kp.first]].second->type == json_tree_type::none)
+          obj->keyvalue[keypair[kp.first]] = {kp.first, kp.second};
+        else if (obj->keyvalue[keypair[kp.first]].second->type == json_tree_type::safe_array)
+        {
+          if (check_safe_array(obj->keyvalue[keypair[kp.first]].second, kp.second))
+            obj->keyvalue[keypair[kp.first]] = {kp.first, kp.second};
+        }
+    }
+
+    return jtree_safe_array(new json_tree_safe_array(jtree_object(obj), array.size()));
+  }
+#endif
+  return jtree_safe_array(new json_tree_safe_array(array[0], array.size()));
+}
+
+std::ostream& jsonhead::json_tree_array::print(std::ostream& os, std::string indent) const {
+  if (array.size() > 0) {
+    os << "[\n";
+    for (auto it = array.rbegin(); it != array.rend(); ++it) {
+      os << indent << "  ";
+      (*it)->print(os, indent + "  ");
+      if (std::next(it) != array.rend()) {
+        os << ",\n";
+      }
+    }
+    os << '\n' << indent << "]";
+  }
+  else {
+    os << "[]";
+  }
+  return os;
+}
+
+jsonhead::json_tree_safe_array::json_tree_safe_array(jtree_value elem_type, size_t elem_size) : 
+    json_tree_node(json_tree_type::safe_array), element_size(elem_size), element_type(elem_type) {
+}
+
+bool jsonhead::json_tree_safe_array::operator==(const json_tree_node& node) {
+  if (type != node.type)
+    return false;
+  auto jta = (json_tree_safe_array *)(&node);
+#ifdef CONFIG_IGNORE_ELEMENT_SIZE
+  return *element_type == *jta->element_type;
+#else
+  return element_size == jta->element_size && *element_type == *jta->element_type;
+#endif
+}
+
+std::ostream& jsonhead::json_tree_safe_array::print(std::ostream& os, std::string indent) const {
+  if (element_type->type == json_tree_type::boolean ||
+      element_type->type == json_tree_type::none    ||
+      element_type->type == json_tree_type::numeric ||
+      element_type->type == json_tree_type::string) {
+    os << "[ ";
+    element_type->print(os);
+    os << " ]";
+  }
+  else {
+    os << "[\n";
+    os << indent << "  ";
+    element_type->print(os, indent + "  ");
+#ifndef CONFIG_IGNORE_ELEMENT_SIZE
+    os << " x " << element_size;
+#endif
+    os << '\n' << indent << "]";
+  }
+  return os;
+}
+
+jsonhead::json_tree_object::json_tree_object()
+  : json_tree_node(json_tree_type::object) {
+}
+
+bool jsonhead::json_tree_object::operator==(const json_tree_node& node) {
+  if (type != node.type)
+    return false;
+  auto jto = (json_tree_object *)(&node);
+#ifdef CONFIG_STRICT
+  if (keyvalue.size() != jto->keyvalue.size())
+    return false;
+  for (int i = 0; i < keyvalue.size(); i++)
+    if (keyvalue[i].first != jto->keyvalue[i].first ||
+        *keyvalue[i].second != *jto->keyvalue[i].second)
+      return false;
+#else
+  // Assume all objects of the same array are the same type
+#endif
+  return true;
+}
+
+std::ostream& jsonhead::json_tree_object::print(std::ostream& os, std::string indent) const
+{
+  os << "{\n";
+  for (auto it = keyvalue.rbegin(); it != keyvalue.rend(); ++it) {
+    os << indent << "  \"" << it->first << "\": ";
+    it->second->print(os, indent + "  ");
+    if (std::next(it) != keyvalue.rend()) {
+      os << ",\n";
+    }
+  }
+  os << '\n' << indent << "}";
+  return os;
+}
+
+jsonhead::json_tree::json_tree(jvalue entry) {
+  if (entry->is_array() || entry->is_object()) {
+    _tree_entry = to_jtree_node(entry);
+  }
+  else
+    throw std::runtime_error("entry must be array or object type!");
+}
+
+jsonhead::jtree_value jsonhead::json_tree::to_jtree_node(jvalue value) {
+  if (value->is_array()) {
+    return to_jtree_array(std::static_pointer_cast<json_array>(value));
+  }
+  else if (value->is_object()) {
+    return to_jtree_object(std::static_pointer_cast<json_object>(value));
+  }
+  else if (value->is_string()) {
+    return jtree_value(new json_tree_node(json_tree_type::string));
+  }
+  else if (value->is_numeric()) {
+    return jtree_value(new json_tree_node(json_tree_type::numeric));
+  }
+  else if (value->is_keyword()) {
+    auto type = ((json_state*)&*value);
+    if (type->type == json_token::v_true || type->type == json_token::v_false)
+      return jtree_value(new json_tree_node(json_tree_type::boolean));
+    else if (type->type == json_token::v_null)
+      return jtree_value(new json_tree_node(json_tree_type::none));
+  }
+  throw std::runtime_error("internal error!");
+}
+
+jsonhead::jtree_value jsonhead::json_tree::to_jtree_array(jarray array) {
+  json_tree_array *arr = new json_tree_array();
+  for (auto it = array->array.begin(); it != array->array.end(); it++) {
+    arr->array.push_back(to_jtree_node(*it));
+  }
+  if (arr->check_consistency()) {
+    auto sa = arr->to_safe_array();
+    delete arr;
+    return sa;
+  }
+  return jtree_value(arr);
+}
+
+jsonhead::jtree_object jsonhead::json_tree::to_jtree_object(jobject object) {
+  json_tree_object* obj = new json_tree_object();
+  for (auto it = object->keyvalue.begin(); it != object->keyvalue.end(); it++)
+    obj->keyvalue.push_back({it->first, to_jtree_node(it->second)});
+  return jtree_object(obj);
 }

@@ -23,6 +23,10 @@
 #include <vector>
 #include <ostream>
 
+#define CONFIG_STABLE
+#define CONFIG_IGNORE_ELEMENT_SIZE
+//#define CONFIG_STRICT
+
 namespace jsonhead {
 
 typedef enum class _json_token {
@@ -50,6 +54,12 @@ typedef enum class _json_token {
 } json_token;
 
 #ifdef CONFIG_ALLOCATOR
+///===-----------------------------------------------------------------------===
+///
+///               Json Allocator
+///
+///===-----------------------------------------------------------------------===
+
 template<typename type>
 class json_allocator {
   size_t capacity;
@@ -94,6 +104,12 @@ public:
 };
 #endif
 
+///===-----------------------------------------------------------------------===
+///
+///               Json Lexer
+///
+///===-----------------------------------------------------------------------===
+
 class json_lexer {
   json_token curtok;
   String curstr;
@@ -134,6 +150,12 @@ private:
   void prev();
 };
 
+///===-----------------------------------------------------------------------===
+///
+///               Json Parser
+///
+///===-----------------------------------------------------------------------===
+
 class json_value {
   int type;
 
@@ -142,7 +164,7 @@ public:
 
   bool is_object() const { return type == 0; }
   bool is_array() const { return type == 1; }
-  bool is_numberic() const { return type == 2; }
+  bool is_numeric() const { return type == 2; }
   bool is_string() const { return type == 3; }
   bool is_keyword() const { return type == 4; }
 
@@ -158,7 +180,11 @@ using jvalue = json_value*;
 class json_object : public json_value {
 public:
   json_object() : json_value(0) {}
+#ifndef CONFIG_STABLE
   std::map<String, jvalue> keyvalue;
+#else
+  std::vector<std::pair<String, jvalue>> keyvalue;
+#endif
 
   virtual std::ostream& print(std::ostream& os, bool format = false, std::string indent = "") const;
 };
@@ -246,6 +272,83 @@ private:
   std::stack<int> stack;
   std::stack<jvalue> values;
   void reduce(int code);
+};
+
+///===-----------------------------------------------------------------------===
+///
+///               Json Tree
+///
+///===-----------------------------------------------------------------------===
+
+typedef enum class _json_tree_type {
+  array,
+  safe_array,
+  object,
+  string,
+  boolean,
+  numeric,
+  none,
+} json_tree_type;
+
+class json_tree_node {
+public:
+  json_tree_type type;
+  json_tree_node(json_tree_type type) : type(type) { }
+  virtual bool operator==(const json_tree_node& node) {
+    return type == node.type || type == json_tree_type::none 
+      || node.type == json_tree_type::none;
+  }
+  bool operator!=(const json_tree_node& node) { return !(*this == node); }
+  virtual std::ostream& print(std::ostream& os, std::string indent = "") const;
+};
+
+using jtree_value = std::shared_ptr<json_tree_node>;
+
+class json_tree_safe_array;
+using jtree_safe_array = std::shared_ptr <json_tree_safe_array>;
+
+class json_tree_array final : public json_tree_node {
+public:
+  json_tree_array();
+  std::vector<jtree_value> array;
+  bool operator==(const json_tree_node& node);
+  bool check_consistency();
+  jtree_safe_array to_safe_array();
+  std::ostream& print(std::ostream& os, std::string indent = "") const;
+};
+
+class json_tree_safe_array final : public json_tree_node {
+public:
+  json_tree_safe_array(jtree_value elem_type, size_t elem_size);
+  jtree_value element_type;
+  size_t element_size;
+  bool operator==(const json_tree_node& node);
+  std::ostream& print(std::ostream& os, std::string indent = "") const;
+};
+
+class json_tree_object final : public json_tree_node {
+public:
+  json_tree_object();
+  std::vector<std::pair<String, jtree_value>> keyvalue;
+  bool operator==(const json_tree_node& node);
+  std::ostream& print(std::ostream& os, std::string indent = "") const;
+};
+
+using jtree_array = std::shared_ptr<json_tree_array>;
+using jtree_object = std::shared_ptr<json_tree_object>;
+
+class json_tree {
+  jtree_value _tree_entry;
+
+public:
+  json_tree(jvalue entry);
+
+  jtree_value tree_entry() { return _tree_entry; }
+
+private:
+  jtree_value to_jtree_node(jvalue value);
+  jtree_value to_jtree_array(jarray array);
+  jtree_object to_jtree_object(jobject object);
 };
 
 } // namespace jsonhead
