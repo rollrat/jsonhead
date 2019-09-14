@@ -13,6 +13,9 @@ int main()
   auto fn = R"(namuwiki_20190312.json)";
   //auto fn = R"(korquad2.0_train_00.json)";
   jsonhead::json_parser ps(fn);
+  // If you are not formatting json or intending to use it in c++, 
+  // enable this syntax to reduce memory usage.
+  //ps.skip_literal() = true;
   long long count = 0;
   while (ps.step()) {
     count++;
