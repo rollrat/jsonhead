@@ -394,31 +394,6 @@ static int group_table[] ={
    0,   1,   1,   2,   2,   3,   3,   4,   4,   5,   6,   6,   7,   7,   7,   7,   7,   7,   7
 };
 
-static jsonhead::json_token symbol_index[] = 
-{
-              jsonhead::json_token::none,
-      jsonhead::json_token::json_nt_json,
-     jsonhead::json_token::json_nt_array,
-    jsonhead::json_token::json_nt_object,
-   jsonhead::json_token::json_nt_members,
-      jsonhead::json_token::json_nt_pair,
-  jsonhead::json_token::json_nt_elements,
-     jsonhead::json_token::json_nt_value, 
-
-     jsonhead::json_token::object_starts,
-       jsonhead::json_token::object_ends,
-           jsonhead::json_token::v_comma,
-            jsonhead::json_token::v_pair,
-      jsonhead::json_token::array_starts,
-        jsonhead::json_token::array_ends,
-            jsonhead::json_token::v_true,
-           jsonhead::json_token::v_false,
-            jsonhead::json_token::v_null,
-          jsonhead::json_token::v_string,
-          jsonhead::json_token::v_number,
-               jsonhead::json_token::eof,
-};
-
 #define ACCEPT_INDEX 28
 
 jsonhead::json_parser::json_parser(std::string file_path, size_t pool_capacity)
