@@ -67,7 +67,9 @@ KorQuAD Structrue Example
   ],
   "version": string
 }
+```
 
+``` c#
 public class KorQuAD_Model
 {
     public class KorQuAD_Model_sub_0
