@@ -32,6 +32,12 @@ int main()
   // Print json structure
   jsonhead::json_tree tr(ps.entry());
   tr.tree_entry()->print(cout);
+  
+  std::cout << std::endl;
+  
+  // Print C# Style json model code
+  jsonhead::json_tree_exporter jte(tr.tree_entry());
+  std::cout << jte.export_cs_newtonsoftjson_style("hiddendata") << '\n';
 }
 ```
 
@@ -60,5 +66,40 @@ KorQuAD Structrue Example
     }
   ],
   "version": string
+}
+
+public class KorQuAD_Model
+{
+    public class KorQuAD_Model_sub_0
+    {
+        public class KorQuAD_Model_sub_1
+        {
+            public string context;
+            public class KorQuAD_Model_sub_3
+            {
+                public string question;
+                public string id;
+                public class KorQuAD_Model_sub_5
+                {
+                    public string text;
+                    public string html_answer_text;
+                    public double answer_start;
+                    public double html_answer_start;
+                }
+
+                public string KorQuAD_Model_sub_5;
+            }
+
+            public List<KorQuAD_Model_sub_3> qas;
+            public string title;
+            public string url;
+            public string raw_html;
+        }
+
+        public List<KorQuAD_Model_sub_1> data;
+        public string version;
+    }
+
+    public KorQuAD_Model_sub_0 entry;
 }
 ```
