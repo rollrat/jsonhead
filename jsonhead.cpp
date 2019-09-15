@@ -694,10 +694,81 @@ bool jsonhead::json_tree_array::check_consistency() {
   if (array.size() == 0)
     return true;
   auto f = array[0];
+#ifdef CONFIG_DISABLE_TOP_LEVEL_COMPRESS
+  if (f->type == json_tree_type::string || f->type == json_tree_type::numeric ||
+    f->type == json_tree_type::boolean)
+    return false;
+#endif
   for (auto it = array.begin() + 1; it != array.end(); it++)
     if (*f != **it)
       return false;
   return true;
+}
+
+#ifdef CONFIG_LAZY_CHECK
+static jsonhead::jtree_value select_safe_array(jsonhead::jtree_value d1, jsonhead::jtree_value d2);
+static jsonhead::jtree_value select_object(jsonhead::jtree_value d1, jsonhead::jtree_value d2) {
+using namespace jsonhead;
+  json_tree_object* obj = new json_tree_object();
+  std::map<String, int> keypair;
+  
+  auto t1 = (json_tree_object*)(&*d1);
+  auto t2 = (json_tree_object*)(&*d2);
+
+  std::vector<json_tree_object*> vv{(json_tree_object*)&*d1, (json_tree_object*)&*d2};
+
+  for (auto jto : vv) {
+    for (auto it = jto->keyvalue.rbegin(); it != jto->keyvalue.rend(); it++) {
+      auto& kp = *it;
+      if (keypair.find(kp.first) == keypair.end()) {
+        obj->keyvalue.push_back({kp.first, kp.second});
+        keypair[kp.first] = keypair.size();
+      }
+      else if (obj->keyvalue[keypair[kp.first]].second->type == json_tree_type::none)
+        obj->keyvalue[keypair[kp.first]] = {kp.first, kp.second};
+      else if (obj->keyvalue[keypair[kp.first]].second->type == json_tree_type::safe_array)
+        obj->keyvalue[keypair[kp.first]] = {kp.first, select_safe_array(obj->keyvalue[keypair[kp.first]].second, kp.second)};
+      else if (obj->keyvalue[keypair[kp.first]].second->type == json_tree_type::object)
+        obj->keyvalue[keypair[kp.first]] = {kp.first, select_object(obj->keyvalue[keypair[kp.first]].second, kp.second)};
+    }
+  }
+
+  return jtree_object(obj);
+}
+
+static jsonhead::jtree_value select_safe_array(jsonhead::jtree_value d1, jsonhead::jtree_value d2) {
+using namespace jsonhead;
+  auto t1 = (json_tree_safe_array*)(&*d1);
+  auto t2 = (json_tree_safe_array*)(&*d2);
+  
+  if (t1->element_size == 0 || t1->element_type->type == json_tree_type::none)
+    return d2;
+  if (t2->element_size == 0 || t2->element_type->type == json_tree_type::none)
+    return d1;
+  if (t1->element_size < t2->element_size)
+    return d2;
+  if (t1->element_size > t2->element_size)
+    return d1;
+  
+  if (t1->element_type->type == json_tree_type::safe_array) {
+    json_tree_safe_array* sa = new json_tree_safe_array(select_safe_array(t1->element_type, t2->element_type), 
+      std::max(t1->element_size, t2->element_size));
+    return jtree_safe_array(sa);
+  }
+  else if (t1->element_type->type == json_tree_type::object) {
+    json_tree_safe_array* sa = new json_tree_safe_array(select_object(t1->element_type, t2->element_type), 
+      std::max(t1->element_size, t2->element_size));
+    return jtree_safe_array(sa);
+  }
+
+  return d1;
+}
+#else
+static bool check_object(jsonhead::jtree_value dest, jsonhead::jtree_value src) {
+  auto t1 = (jsonhead::json_tree_object*)(&*dest);
+  auto t2 = (jsonhead::json_tree_object*)(&*src);
+
+  return t1->keyvalue.size() < t2->keyvalue.size();
 }
 
 static bool check_safe_array(jsonhead::jtree_value dest, jsonhead::jtree_value src) {
@@ -706,10 +777,15 @@ static bool check_safe_array(jsonhead::jtree_value dest, jsonhead::jtree_value s
 
   if (t1->element_size == 0 || t1->element_type->type == jsonhead::json_tree_type::none)
     return true;
+  if (t1->element_size < t2->element_size)
+    return true;
   if (t1->element_type->type == jsonhead::json_tree_type::safe_array)
     return check_safe_array(t1->element_type, t2->element_type);
+  if (t1->element_type->type == jsonhead::json_tree_type::object)
+    return check_object(t1->element_type, t2->element_type);
   return false;
 }
+#endif
 
 jsonhead::jtree_safe_array jsonhead::json_tree_array::to_safe_array() {
   if (array.size() == 0) {
@@ -719,10 +795,24 @@ jsonhead::jtree_safe_array jsonhead::json_tree_array::to_safe_array() {
   if (array[0]->type == json_tree_type::object) {
     json_tree_object* obj = new json_tree_object();
     std::map<String, int> keypair;
+    obj->print_reverse = true;
 
     for (auto& it : array) {
       auto tob = ((json_tree_object*)(&*it));
-      for (auto& kp : tob->keyvalue)
+      for (auto it = tob->keyvalue.rbegin(); it != tob->keyvalue.rend(); it++) {
+        auto& kp = *it;
+#ifdef CONFIG_LAZY_CHECK
+        if (keypair.find(kp.first) == keypair.end()) {
+          obj->keyvalue.push_back({kp.first, kp.second});
+          keypair[kp.first] = keypair.size();
+        }
+        else if (obj->keyvalue[keypair[kp.first]].second->type == json_tree_type::none)
+          obj->keyvalue[keypair[kp.first]] = {kp.first, kp.second};
+        else if (obj->keyvalue[keypair[kp.first]].second->type == json_tree_type::safe_array)
+          obj->keyvalue[keypair[kp.first]] = {kp.first, select_safe_array(obj->keyvalue[keypair[kp.first]].second, kp.second)};
+        else if (obj->keyvalue[keypair[kp.first]].second->type == json_tree_type::object)
+          obj->keyvalue[keypair[kp.first]] = {kp.first, select_object(obj->keyvalue[keypair[kp.first]].second, kp.second)};
+#else
         if (keypair.find(kp.first) == keypair.end()) {
           obj->keyvalue.push_back({kp.first, kp.second});
           keypair[kp.first] = keypair.size();
@@ -734,6 +824,13 @@ jsonhead::jtree_safe_array jsonhead::json_tree_array::to_safe_array() {
           if (check_safe_array(obj->keyvalue[keypair[kp.first]].second, kp.second))
             obj->keyvalue[keypair[kp.first]] = {kp.first, kp.second};
         }
+        else if (obj->keyvalue[keypair[kp.first]].second->type == json_tree_type::object)
+        {
+          if (check_object(obj->keyvalue[keypair[kp.first]].second, kp.second))
+            obj->keyvalue[keypair[kp.first]] = {kp.first, kp.second};
+        }
+#endif
+      }
     }
 
     return jtree_safe_array(new json_tree_safe_array(jtree_object(obj), array.size()));
@@ -820,11 +917,22 @@ bool jsonhead::json_tree_object::operator==(const json_tree_node& node) {
 std::ostream& jsonhead::json_tree_object::print(std::ostream& os, std::string indent) const
 {
   os << "{\n";
-  for (auto it = keyvalue.rbegin(); it != keyvalue.rend(); ++it) {
-    os << indent << "  \"" << it->first << "\": ";
-    it->second->print(os, indent + "  ");
-    if (std::next(it) != keyvalue.rend()) {
-      os << ",\n";
+  if (!print_reverse) {
+    for (auto it = keyvalue.rbegin(); it != keyvalue.rend(); ++it) {
+      os << indent << "  \"" << it->first << "\": ";
+      it->second->print(os, indent + "  ");
+      if (std::next(it) != keyvalue.rend()) {
+        os << ",\n";
+      }
+    }
+  }
+  else {
+    for (auto it = keyvalue.begin(); it != keyvalue.end(); ++it) {
+      os << indent << "  \"" << it->first << "\": ";
+      it->second->print(os, indent + "  ");
+      if (std::next(it) != keyvalue.end()) {
+        os << ",\n";
+      }
     }
   }
   os << '\n' << indent << "}";
@@ -867,11 +975,13 @@ jsonhead::jtree_value jsonhead::json_tree::to_jtree_array(jarray array) {
   for (auto it = array->array.begin(); it != array->array.end(); it++) {
     arr->array.push_back(to_jtree_node(*it));
   }
+#ifdef CONFIG_COMPRESS
   if (arr->check_consistency()) {
     auto sa = arr->to_safe_array();
     delete arr;
     return sa;
   }
+#endif
   return jtree_value(arr);
 }
 
@@ -880,4 +990,162 @@ jsonhead::jtree_object jsonhead::json_tree::to_jtree_object(jobject object) {
   for (auto it = object->keyvalue.begin(); it != object->keyvalue.end(); it++)
     obj->keyvalue.push_back({it->first, to_jtree_node(it->second)});
   return jtree_object(obj);
+}
+
+jsonhead::json_tree_exporter::json_tree_exporter(jtree_value tree_entry)
+  : _tree_entry(tree_entry) {
+}
+
+jsonhead::String jsonhead::json_tree_exporter::export_cs_newtonsoftjson_style(String class_name) {
+  if (freeze)
+    throw std::runtime_error("create new instance for continue!");
+  base_class_name = class_name;
+  freeze = true;
+  append("public class "_s + class_name);
+  append('{');
+  up_indent();
+
+  /////////////////////
+  if (_tree_entry->type == json_tree_type::safe_array) {
+    auto e_type = ((json_tree_safe_array*)&*_tree_entry)->element_type->type;
+    if (e_type == json_tree_type::boolean) {
+      append("public List<bool> entry;");
+    } else if (e_type == json_tree_type::numeric) {
+      append("public List<double> entry;");
+    } else if (e_type == json_tree_type::string) {
+      append("public List<string> entry;");
+    } else {
+      String sub_class_name = class_name + "_sub_" + no_name_class++;
+      cs_newtonsoftjson_safe_array(std::static_pointer_cast<json_tree_safe_array>(_tree_entry), sub_class_name);
+      append("public List<"_s + sub_class_name + "> entry;");
+    }
+  }
+  else if (_tree_entry->type == json_tree_type::object) {
+    String sub_class_name = class_name + "_sub_" + no_name_class++;
+    append("public class "_s + sub_class_name);
+    append('{');
+    up_indent();
+    cs_newtonsoftjson_object(std::static_pointer_cast<json_tree_object>(_tree_entry), sub_class_name);
+    down_indent();
+    append('}');
+    append("");
+    append("public "_s + sub_class_name + " entry;");
+  }
+  else {
+    throw std::runtime_error("entry must be safe_array or object type!");
+  }
+
+  down_indent();
+  append('}');
+  return builder.ToString();
+}
+
+jsonhead::String jsonhead::json_tree_exporter::export_cpp_nlohmann_style(String class_name) {
+  if (freeze)
+    throw std::runtime_error("create new instance for continue!");
+  freeze = true;
+  return builder.ToString();
+}
+
+jsonhead::String jsonhead::json_tree_exporter::export_java_gson_stype(String class_name) {
+  if (freeze)
+    throw std::runtime_error("create new instance for continue!");
+  freeze = true;
+  return builder.ToString();
+}
+
+jsonhead::String jsonhead::json_tree_exporter::export_rust_serders_style(String class_name) {
+  if (freeze)
+    throw std::runtime_error("create new instance for continue!");
+  freeze = true;
+  return builder.ToString();
+}
+
+void jsonhead::json_tree_exporter::up_indent() {
+  indent = indent + "    ";
+}
+
+void jsonhead::json_tree_exporter::down_indent() {
+  if (indent.Length() > 0)
+    indent = indent.Substring(4);
+}
+
+void jsonhead::json_tree_exporter::append(String str) {
+  builder.Append(indent);
+  builder.Append(str);
+  builder.Append("\n");
+}
+
+void jsonhead::json_tree_exporter::cs_newtonsoftjson_object_internal(std::pair<String, jtree_value>& it) {
+  auto e_type = it.second->type;
+  if (e_type == json_tree_type::boolean) {
+    append("public bool "_s + it.first + ";");
+  } else if (e_type == json_tree_type::numeric) {
+    append("public double "_s + it.first + ";");
+  } else if (e_type  == json_tree_type::string) {
+    append("public string "_s + it.first + ";");
+  } else if (e_type == json_tree_type::safe_array) {
+    auto r_type = ((json_tree_safe_array*)&*it.second)->element_type->type;
+    if (r_type == json_tree_type::boolean) {
+      append("public List<bool> "_s + it.first + ";");
+    } else if (r_type == json_tree_type::numeric) {
+      append("public List<double> "_s + it.first + ";");
+    } else if (r_type == json_tree_type::string) {
+      append("public List<string> "_s + it.first + ";");
+    } else {
+      String sub_class_name = base_class_name + "_sub_" + no_name_class++;
+      cs_newtonsoftjson_safe_array(std::static_pointer_cast<json_tree_safe_array>(it.second), sub_class_name);
+      append("public List<"_s + sub_class_name + "> " + it.first + ";");
+    }
+  } else if (e_type == json_tree_type::object) {
+    String sub_class_name = base_class_name + "_sub_" + no_name_class++;
+    append("public class "_s + sub_class_name);
+    append('{');
+    up_indent();
+    cs_newtonsoftjson_object(std::static_pointer_cast<json_tree_object>(it.second), sub_class_name);
+    down_indent();
+    append('}');
+    append("");
+    append("public string "_s + sub_class_name + ";");
+  }
+}
+
+void jsonhead::json_tree_exporter::cs_newtonsoftjson_object(jtree_object object, String class_name) {
+  if (!object->print_reverse) {
+    for (auto it = object->keyvalue.rbegin(); it != object->keyvalue.rend(); it++) {
+      cs_newtonsoftjson_object_internal(*it);
+    }
+  }
+  else {
+    for (auto it = object->keyvalue.begin(); it != object->keyvalue.end(); it++) {
+      cs_newtonsoftjson_object_internal(*it);
+    }
+  }
+}
+
+void jsonhead::json_tree_exporter::cs_newtonsoftjson_safe_array(jtree_safe_array array, String class_name) {
+  append("public class "_s + class_name);
+  append('{');
+  up_indent();
+  
+  if (array->element_type->type == json_tree_type::boolean) {
+    append("public List<bool> entry;");
+  } else if (array->element_type->type == json_tree_type::numeric) {
+    append("public List<double> entry;");
+  } else if (array->element_type->type == json_tree_type::string) {
+    append("public List<string> entry;");
+  }
+  else if (array->element_type->type == json_tree_type::safe_array) {
+    String sub_class_name = base_class_name + "_sub_" + no_name_class++;
+    cs_newtonsoftjson_safe_array(std::static_pointer_cast<json_tree_safe_array>(array->element_type), sub_class_name);
+    append("public List<"_s + sub_class_name + "> temp;");
+  } 
+  else if (array->element_type->type == json_tree_type::object) {
+    String sub_class_name = base_class_name + "_sub_" + no_name_class++;
+    cs_newtonsoftjson_object(std::static_pointer_cast<json_tree_object>(array->element_type), sub_class_name);
+  }
+  
+  down_indent();
+  append('}');
+  append("");
 }

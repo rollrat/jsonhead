@@ -26,6 +26,9 @@
 #define CONFIG_STABLE
 #define CONFIG_IGNORE_ELEMENT_SIZE
 //#define CONFIG_STRICT
+#define CONFIG_COMPRESS
+//#define CONFIG_DISABLE_TOP_LEVEL_COMPRESS
+#define CONFIG_LAZY_CHECK
 
 namespace jsonhead {
 
@@ -332,6 +335,7 @@ public:
   std::vector<std::pair<String, jtree_value>> keyvalue;
   bool operator==(const json_tree_node& node);
   std::ostream& print(std::ostream& os, std::string indent = "") const;
+  bool print_reverse = false;
 };
 
 using jtree_array = std::shared_ptr<json_tree_array>;
@@ -349,6 +353,32 @@ private:
   jtree_value to_jtree_node(jvalue value);
   jtree_value to_jtree_array(jarray array);
   jtree_object to_jtree_object(jobject object);
+};
+
+class json_tree_exporter {
+  jtree_value _tree_entry;
+  StringBuilder builder;
+  String indent = "";
+  String base_class_name;
+  bool freeze = false;
+  int no_name_class = 0;
+
+public:
+  json_tree_exporter(jtree_value tree_entry);
+
+  String export_cs_newtonsoftjson_style(String class_name = "MyJsonModel");
+  String export_cpp_nlohmann_style(String class_name = "MyJsonModel");
+  String export_java_gson_stype(String class_name = "MyJsonModel");
+  String export_rust_serders_style(String class_name = "MyJsonModel");
+
+private:
+  void up_indent();
+  void down_indent();
+  void append(String str);
+  
+  void cs_newtonsoftjson_object_internal(std::pair<String, jtree_value>& it);
+  void cs_newtonsoftjson_object(jtree_object object, String class_name);
+  void cs_newtonsoftjson_safe_array(jtree_safe_array array, String class_name);
 };
 
 } // namespace jsonhead

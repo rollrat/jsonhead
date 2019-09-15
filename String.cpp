@@ -310,13 +310,14 @@ String::String(char ch)
 String::String(int num)
 {
   char buffer[65];
+  sprintf(buffer, "%d", num);
   InitString((const char *)buffer);
 }
 
 String::String(long int num)
 {
   char buffer[65];
-  sprintf(buffer, "%lld", num);
+  sprintf(buffer, "%ld", num);
   InitString((const char *)buffer);
 }
 
