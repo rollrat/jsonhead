@@ -1,4 +1,13 @@
-# JsonHead - Fast and Simple json parser
+# JsonHead - Fast and Simple json structure analyzer
+
+## Motivation
+
+It may be difficult to analyze the `json` file because of its large size, 
+its structure is complicated, or it may be difficult to grasp the overall 
+structure because parts are omitted (ex. null type exists).
+
+This project began to automate the task of analyzing any type of `json` file 
+and creating a model.
 
 ## Example
 
@@ -68,6 +77,8 @@ KorQuAD Structrue Example
   "version": string
 }
 ```
+
+Automate created model of KorQuAD
 
 ``` c#
 public class KorQuAD_Model
