@@ -1106,7 +1106,7 @@ void jsonhead::json_tree_exporter::cs_newtonsoftjson_object_internal(std::pair<S
     down_indent();
     append('}');
     append("");
-    append("public string "_s + sub_class_name + ";");
+    append("public "_s + sub_class_name + " " + it.first + ";");
   }
 }
 
