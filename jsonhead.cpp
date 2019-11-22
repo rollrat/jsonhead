@@ -100,7 +100,7 @@ bool jsonhead::json_lexer::next() {
           this->curtok = json_token::v_true;
         else if (s == "false")
           this->curtok = json_token::v_false;
-        else if (s == "nul")
+        else if (s == "null")
           this->curtok = json_token::v_null;
         else
           return false;
