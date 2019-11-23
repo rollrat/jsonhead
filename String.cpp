@@ -195,7 +195,7 @@ char *jsonhead::StringTools::strrnstrn(char * ptr, size_t ptrlen,
   return NULL;
 }
 
-void jsonhead::StringTools::strnset(char *ptr, wchar_t ch, size_t len) {
+void jsonhead::StringTools::strnset(char *ptr, char ch, size_t len) {
   char *trim = (char *)align_address(ptr);
 
   if (trim < ptr) trim = ptr;
@@ -203,31 +203,25 @@ void jsonhead::StringTools::strnset(char *ptr, wchar_t ch, size_t len) {
   for (; ptr < trim && len; ptr++, len--) *ptr = ch;
 
   if (len > 0) {
-    ptr_type put = ((ptr_type)ch << 0) | ((ptr_type)ch << 16);
+    ptr_type put = ((ptr_type)ch << 0) | ((ptr_type)ch << 8) | ((ptr_type)ch << 16) | ((ptr_type)ch << 24);
     if (sizeof(ptr_type) == sizeof(uint64_t))
-      put |= ((ptr_type)ch << 32) | ((ptr_type)ch << 48);
+      put |= ((ptr_type)ch << 32) | ((ptr_type)ch << 40) | ((ptr_type)ch << 48) | ((ptr_type)ch << 56);
 
-    while (len >= sizeof(ptr_type) / 2) {
+    while (len >= sizeof(ptr_type)) {
       *(ptr_type *)trim = put;
-      trim += sizeof(ptr_type) / 2;
-      len -= sizeof(ptr_type) / 2;
+      trim += sizeof(ptr_type);
+      len -= sizeof(ptr_type);
     }
 
     if (sizeof(ptr_type) == sizeof(uint64_t)) {
-      if (len == 3) {
-        *(uint32_t *)trim = put;
-        trim[2] = ch;
-        return;
-      }
-      if (len == 2) {
-        *(uint32_t *)trim = put;
-        return;
-      }
+      /*if (len == 7) { *(uint32_t *)trim = put; trim += 4; len -= 4; }
+      if (len == 6) { *(uint32_t *)trim = put; trim += 4; len -= 4; }
+      if (len == 5) { *(uint32_t *)trim = put; trim += 4; len -= 4; }*/
+      if (len >= 4) { *(uint32_t *)trim = put; trim += 4; len -= 4; }
     }
-    if (len == 1) {
-      *(uint16_t *)trim = put;
-      return;
-    }
+    if (len == 3) { *trim = ch; *(trim + 1) = ch; *(trim + 2) = ch; return; }
+    if (len == 2) { *trim = ch; *(trim + 1) = ch; return; }
+    if (len == 1) { *trim = ch; return; }
   }
 }
 
