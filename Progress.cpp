@@ -55,7 +55,7 @@ jsonhead::WaitProgress::WaitProgress() {
   timer = std::thread([&]() {
     while (true) {
       if (disposed) break;
-		  auto delta = std::chrono::steady_clock::now() + 
+      auto delta = std::chrono::steady_clock::now() + 
                    std::chrono::milliseconds(125);
       Tick();
       std::this_thread::sleep_until(delta);
