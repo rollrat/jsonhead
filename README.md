@@ -1,5 +1,7 @@
 # JsonHead - Fast and Simple json structure analyzer
 
+If you don't want a json scheme generator, use `simdjson` or another json library.
+
 ## Motivation
 
 It may be difficult to analyze the `json` file because of its large size, 
