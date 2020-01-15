@@ -199,7 +199,7 @@ public:
   static char *strrnchr(char *ptr, size_t len, char ch);
   static char *strrnstrn(char *ptr, size_t ptrlen, 
     const char *dest, size_t destlen);
-  static void strnset(char *ptr, wchar_t ch, size_t len);
+  static void strnset(char *ptr, char ch, size_t len);
   static size_t strcountch(char *ptr, char *last, char ch);
 };
 
@@ -237,7 +237,9 @@ public:
   String(const String& cnt) : String((const char *)cnt.first, cnt.length) {}
   String(std::string& str) : String(&str[0], str.length()) { }
   String(const std::string& str) : String(str.c_str(), str.length()) { }
-  ~String() { if (first != nullptr && !tm){delete[] first; first = nullptr;}}
+  ~String() { if (first != nullptr && !tm){
+    delete[] first; first = nullptr;
+  }}
 
   inline size_t Length() const { return length; }
   inline bool Empty() const { return length == 0; }

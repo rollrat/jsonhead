@@ -617,7 +617,14 @@ void jsonhead::json_parser::reduce(int code) {
 
   case 13:
 #ifndef CONFIG_ALLOCATOR
-    values.push(std::shared_ptr<json_numeric>(new json_numeric(contents.top())));
+    {
+      auto numeric = std::shared_ptr<json_numeric>(new json_numeric(contents.top()));
+#ifdef CONFIG_CHECK_INTEGER
+      if (!contents.top().Contains('.'))
+        numeric->is_integer = true;
+#endif
+      values.push(numeric);
+    }
 #else
     values.push(jnumeric_pool.allocate(contents.top()));
 #endif

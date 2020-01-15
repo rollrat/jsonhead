@@ -29,6 +29,7 @@
 #define CONFIG_COMPRESS
 //#define CONFIG_DISABLE_TOP_LEVEL_COMPRESS
 #define CONFIG_LAZY_CHECK
+//#define CONFIG_CHECK_INTEGER
 
 namespace jsonhead {
 
@@ -213,6 +214,7 @@ public:
   json_numeric(String num) : json_value(2), numstr(std::move(num)) {}
   String numstr;
 
+  bool is_integer = false;
   virtual std::ostream& print(std::ostream& os, bool format = false, std::string indent = "") const;
 };
 
