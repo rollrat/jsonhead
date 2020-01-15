@@ -102,7 +102,7 @@ public class KorQuAD_Model
                     public double html_answer_start;
                 }
 
-                public string KorQuAD_Model_sub_5;
+                public KorQuAD_Model_sub_5 answer;
             }
 
             public List<KorQuAD_Model_sub_3> qas;
